@@ -6,10 +6,10 @@
 Usage:
   do.py
   do.py add <name> [<tag>] [<status>] [--reminder=<reminder>]
-  do.py ls [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>]
+  do.py done <id>
+  do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>]
   do.py rm <id>
   do.py get <id>
-  do.py set <id>
   do.py export <path> [--format=<format>]
   do.py setpath <path>
   do.py use <db>
@@ -32,10 +32,13 @@ Options:
 #    IMPORTS AND CONSTANTS
 #########################################################################
 from docopt import docopt
+from padnums import pprint_table
+from printtable import print_table
 from dal import DAL, Field
 import os
 import sys
 import datetime
+from taskmodel import Task
 
 try:
     from win32com.shell import shellcon, shell
@@ -68,6 +71,9 @@ DBURI = CONFIG['dburi']
 SHELLDOC = (
   "USAGE:\n"
   ">>> add('taskname', tag='', status='new|working|cancel|done|post', reminder='')\n"
+  "tasklist is a list of all tasks\n"
+  ">>> tasklist[0].name shows the name for task 1\n"
+  "" + Task.__doc__
 )
 #########################################################################
 #    MAIN PROGRAM
@@ -83,6 +89,12 @@ def main(arguments):
         print add(arguments)
     elif arguments['ls']:
         print ls(arguments)
+    elif arguments['rm']:
+        print rm(arguments)
+    elif arguments['done']:
+        print done(arguments)
+    elif arguments['get']:
+        print get(arguments)
     elif arguments['--args']:
         print arguments
     else:
@@ -96,10 +108,15 @@ def database():
         Field("status", "string"),
         Field("reminder", "string"),
         Field("created_on", "datetime"),
+        Field("deleted", "boolean", default=False),
     )
     return _db, tasks
 
 def shell():
+    global tasklist
+    tasklist = []
+    for task in db(tasks.deleted != True).select():
+        tasklist.append(Task(db, task))
     import code
     code.interact(local=globals(), banner=SHELLDOC)
 
@@ -114,21 +131,56 @@ def add(arguments):
     db.commit()
     return "Task %d inserted" % task
 
-def ls(tag=None, search=None, date=None,
-       month=None, day=None, year=None):
-    query = tasks
+def ls(arguments):
+    # --all
+    #tag=None, search=None, date=None,
+    #month=None, day=None, year=None
+    query = tasks.deleted != True
+    query &= tasks.status != 'done' if not arguments['--all'] and not arguments['--status'] else tasks.id > 0
+    if arguments['--tag']:
+        query &= tasks.tag == arguments['--tag']
+    if arguments['--status']:
+        query &= tasks.status == arguments['--status']
+    if arguments['--search']:
+        query &= tasks.name.like('%%%s%%' % arguments['--search'].lower())
+
 
     rows = db(query).select()
-    return rows
 
-def rm(did):
-    pass
+    table = [['ID','Name','Tag','Status','Reminder','Created']]
+    for row in rows:
+        table.append([str(row.id), str(row.name), str(row.tag), str(row.status), str(row.reminder), str(row.created_on)])
+    #pprint_table(sys.stdout, table)
+    print_table(table)
 
-def get(did):
-    pass
+    return "TOTAL:%s tasks" % len(rows) if rows else "NO TASKS FOUND\nUse --help to see the usage tips"
 
-def set(did):
-    pass
+def rm(arguments):
+    task = tasks[arguments['<id>']]
+    if task:
+        task.update_record(deleted=True)
+        db.commit()
+        return "%s deleted" % arguments['<id>']
+    else:
+        return "Task not found"
+
+def done(arguments):
+    task = tasks[arguments['<id>']]
+    if task:
+        task.update_record(status='done')
+        db.commit()
+        return "%s marked as done" % arguments['<id>']
+    else:
+        return "Task not found"
+
+def get(arguments):
+    row = tasks[arguments['<id>']]
+    if row:
+        task = Task(db, row)
+        import code
+        code.interact(local=dict(task=task), banner=Task.__doc__)
+    else:
+        return "Not found"
 
 #########################################################################
 #    STARTUP
