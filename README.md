@@ -14,7 +14,9 @@ Instalation
 or
 
 ```git clone https://github.com/rochacbruno/dopy```
+
 ```cd dopy```
+
 ```python setup.py install```
 
 or
