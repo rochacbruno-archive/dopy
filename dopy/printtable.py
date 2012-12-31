@@ -56,7 +56,11 @@ def print_table_row(row, top_border=False, bottom_border=False):
     out = vc
     c = 0
     for col in row:
-        sep = sep + hc * len(col) + cc
+
+        lencol = len(cleaned(col)) if any([top_border, bottom_border]) else len(col)
+
+        sep = sep + hc * lencol + cc
+
         out = out + row[c] + vc
         c += 1
     # now print table row
@@ -108,11 +112,44 @@ def get_column(matrix=[], column=0):
         col.append(cell)
     return col
 
+
+def cleaned(c):
+    colors = [
+     '\x1b[0m',
+     '\x1b[33m',
+     '\x1b[32m',
+     '\x1b[31m',
+     '\x1b[30m',
+     '\x1b[37m',
+     '\x1b[36m',
+     '\x1b[35m',
+     '\x1b[34m',
+     '\x1b[8m',
+     '\x1b[5m',
+     '\x1b[4m',
+     '\x1b[7m',
+     '\x1b[1m',
+     '\x1b[0m',
+     '\x1b[2m',
+     '\x1b[42m',
+     '\x1b[43m',
+     '\x1b[40m',
+     '\x1b[41m',
+     '\x1b[46m',
+     '\x1b[0m',
+     '\x1b[44m',
+     '\x1b[47m',
+     '\x1b[45m']
+    for color in colors:
+        c = c.replace(color, '')
+
+    return c
+
 def max_cell_length(cells):
     """Returns the length of the longest cell from all the given cells."""
     max_len=0
     for c in cells:
-        cur_len=len(c)
+        cur_len=len( cleaned(c) )
         if cur_len > max_len:
             max_len = cur_len
     return max_len
@@ -131,7 +168,7 @@ def align_cell_content(cell, max_cell_length=0, alignment=0, truncate=True):
 
     if max_cell_length == 0:
         return cell
-    cur_cell_length=len(cell)
+    cur_cell_length=len( cleaned(cell) )
     padding=max_cell_length-cur_cell_length
     if padding == 0: return cell
     if padding < 0:

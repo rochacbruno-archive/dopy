@@ -39,6 +39,8 @@ import os
 import sys
 import datetime
 from taskmodel import Task
+#from termcolor import colored, cprint
+from colors import *
 
 try:
     from win32com.shell import shellcon, shell
@@ -147,13 +149,15 @@ def ls(arguments):
 
     rows = db(query).select()
 
-    table = [['ID','Name','Tag','Status','Reminder','Created']]
+    headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Created']]
+
+    table = [headers]
     for row in rows:
-        table.append([str(row.id), str(row.name), str(row.tag), str(row.status), str(row.reminder), str(row.created_on)])
+        table.append([ID(str(row.id)), NAME(str(row.name)), TAG(str(row.tag)), STATUS(str(row.status)), str(row.reminder), str(row.created_on)])
     #pprint_table(sys.stdout, table)
     print_table(table)
 
-    return "TOTAL:%s tasks" % len(rows) if rows else "NO TASKS FOUND\nUse --help to see the usage tips"
+    return FOOTER("TOTAL:%s tasks" % len(rows) if rows else "NO TASKS FOUND\nUse --help to see the usage tips")
 
 def rm(arguments):
     task = tasks[arguments['<id>']]
@@ -187,5 +191,5 @@ def get(arguments):
 #########################################################################
 
 if __name__ == '__main__':
-    arguments = docopt(__doc__, version='Dopy 0.1')
+    arguments = docopt(__doc__, version='Dopy 0.2')
     main(arguments)
