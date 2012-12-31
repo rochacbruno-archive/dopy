@@ -1,6 +1,14 @@
 dopy
 ====
 
+ ____                     _
+|  _ \  ___   _ __  _   _| |
+| | | |/ _ \ | '_ \| | | | |
+| |_| | (_) || |_) | |_| |_|
+|____/ \___(_) .__/ \__, (_)
+             |_|    |___/
+
+
 To Do list on Command Line Interface
 
 Manage to-do list on a shell based simple interface and stores your to-do locally on a sqlite database
