@@ -7,6 +7,8 @@ Manage to-do list on a shell based simple interface and stores your to-do locall
 
 optionally use your Dropbox to store the database
 
+![image](https://raw.github.com/rochacbruno/dopy/master/dopy.png)
+
 Instalation
 ====
 ```pip install dopy```
