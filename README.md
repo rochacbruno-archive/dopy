@@ -23,7 +23,11 @@ or
 
 ```git clone https://github.com/rochacbruno/dopy```
 
+```chmod +x dopy/dopy/do.py```
+
 ```sudo ln -s path/to/dopy/dopy/do.py /bin/dopy```
+
+**Maybe the pip option will not be working for a while**
 
 Usage
 ====
