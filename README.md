@@ -42,19 +42,35 @@ or
 Usage
 ====
 
+    ____                     _
+    |  _ \  ___   _ __  _   _| |
+    | | | |/ _ \ | '_ \| | | | |
+    | |_| | (_) || |_) | |_| |_|
+    |____/ \___(_) .__/ \__, (_)
+                 |_|    |___/
+
+
     Usage:
-      do.py
-      do.py add <name> [<tag>] [<status>] [--reminder=<reminder>]
-      do.py done <id>
-      do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>]
-      do.py rm <id>
-      do.py get <id>
-      do.py export <path> [--format=<format>]
-      do.py setpath <path>
-      do.py use <db>
-      do.py -h | --help
-      do.py --version
+      do.py [--use=<db>] [--args]
+      do.py add <name> [<tag>] [<status>] [--reminder=<reminder>] [--use=<db>] [--args]
+      do.py done <id> [--use=<db>] [--args]
+      do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>] [--use=<db>] [--args]
+      do.py rm <id> [--use=<db>] [--args]
+      do.py get <id> [--use=<db>] [--args]
+      do.py note <id> [--use=<db>] [--rm=<noteindex>] [--args]
+      do.py show <id> [--use=<db>] [--args]
+      do.py note <id> <note> [--use=<db>] [--args]
+      do.py export <path> [--format=<format>] [--use=<db>] [--args]
+      do.py setpath <path> [--args]
+      do.py use <db> [--args]
+      do.py -h | --help [--args]
+      do.py --version [--args]
       do.py --args
+
+    Options:
+      -h --help      Show this screen.
+      --version     Show version.
+      --args          Show args.
 
 
 1. to enter in SHELL mode
@@ -136,6 +152,80 @@ dopy done <id>
     >>> task.status
     'working'
     >>>
+
+
+NOTES
+====
+
+Doing a ```dopy ls``` you can see the ```ID``` of the tasks, using this ```ID``` you can assign notes
+
+1. Including a note
+
+```dopy note 1 "This is the note for the task 1"```
+
+The above command inserts the note and prints the TASK with notes.
+
+    +--+-----+-------+------+--------+-----------+
+    |ID| Name|    Tag|Status|Reminder|    Created|
+    +--+-----+-------+------+--------+-----------+
+    | 1|teste|default|   new|    None|01/01-02:14|
+    +--+-----+-------+------+--------+-----------+
+    NOTES:
+    +------------------------------------+
+    0 This is the note fot task 1
+    +------------------------------------+
+    1 notes
+
+2. Consulting the notes
+
+You can also show all notes for a task using the show command
+
+```dopy show 1```
+
+    +--+-----+-------+------+--------+-----------+
+    |ID| Name|    Tag|Status|Reminder|    Created|
+    +--+-----+-------+------+--------+-----------+
+    | 1|teste|default|   new|    None|01/01-02:14|
+    +--+-----+-------+------+--------+-----------+
+    NOTES:
+    +----------------------------------------+
+    0 This is the note fot task 1
+    1 This is another note for task 1
+    +----------------------------------------+
+    2 notes
+
+
+3. Removing a note
+
+Notes can be removed by its index number.
+
+Example: To remove the latest note
+
+```dopy note 1 --rm=-1```
+
+where ```-1``` is the index for the last element in notes
+
+To remove the first note
+
+```dopy note 1 --rm=0```
+
+Switching DBS
+====
+
+It is possible to use more than one database by switching using ```--use``` argument
+
+```dopy add "Including on another db" --use=mynewdb
+
+The above command will use a db called "mynewdb" (it will be created if not exists)
+
+In the same way you have to specify the db for other operations
+
+```dopy ls --all --use=mynewdb```  to list all tasks on the db
+
+--------------
+Note, you can also change the default db in .dopyrc file
+-----------------
+
 
 TODO
 ====
