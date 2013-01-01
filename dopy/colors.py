@@ -11,6 +11,8 @@ ID = lambda s: colored(s,None, 'on_cyan', attrs=['bold'])
 NAME = lambda s: colored(s, 'white')
 TAG = lambda s: colored(s, 'yellow')
 
+NOTE = lambda s, i: colored(s, 'yellow' if i % 2 ==0 else 'blue', attrs=['bold'])
+
 def STATUS(s):
     if s == 'new':
         return colored(s, 'white', 'on_green', attrs=['bold'])

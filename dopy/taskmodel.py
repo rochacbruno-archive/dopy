@@ -54,6 +54,15 @@ To exit
         self.row.update_record(reminder=value)
         self.db.commit()
 
+    @property
+    def notes(self):
+        return self.row.notes
+
+    @notes.setter
+    def notes(self, value):
+        self.row.update_record(notes=value)
+        self.db.commit()
+
     def delete(self):
         self.row.delete_record()
         self.db.commit()

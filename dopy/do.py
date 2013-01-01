@@ -10,29 +10,26 @@
 
 
 Usage:
-  do.py
-  do.py add <name> [<tag>] [<status>] [--reminder=<reminder>]
-  do.py done <id>
-  do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>]
-  do.py rm <id>
-  do.py get <id>
-  do.py export <path> [--format=<format>]
-  do.py setpath <path>
-  do.py use <db>
-  do.py -h | --help
-  do.py --version
+  do.py [--use=<db>] [--args]
+  do.py add <name> [<tag>] [<status>] [--reminder=<reminder>] [--use=<db>] [--args]
+  do.py done <id> [--use=<db>] [--args]
+  do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>] [--use=<db>] [--args]
+  do.py rm <id> [--use=<db>] [--args]
+  do.py get <id> [--use=<db>] [--args]
+  do.py note <id> [--use=<db>] [--rm=<noteindex>] [--args]
+  do.py show <id> [--use=<db>] [--args]
+  do.py note <id> <note> [--use=<db>] [--args]
+  do.py export <path> [--format=<format>] [--use=<db>] [--args]
+  do.py setpath <path> [--args]
+  do.py use <db> [--args]
+  do.py -h | --help [--args]
+  do.py --version [--args]
   do.py --args
 
 Options:
   -h --help      Show this screen.
   --version     Show version.
   --args          Show args.
-"""
-# NOTE
-"""
-  --speed=<kn>  Speed in knots [default: 10].
-  --moored      Moored (anchored) mine.
-  --drifting    Drifting mine.
 """
 #########################################################################
 #    IMPORTS AND CONSTANTS
@@ -47,6 +44,7 @@ import datetime
 from taskmodel import Task
 #from termcolor import colored, cprint
 from colors import *
+from pprint import pprint
 
 try:
     from win32com.shell import shellcon, shell
@@ -76,6 +74,7 @@ else:
 DBDIR = CONFIG['dbdir']
 DBURI = CONFIG['dburi']
 
+
 SHELLDOC = (
   "USAGE:\n"
   ">>> add('taskname', tag='', status='new|working|cancel|done|post', reminder='')\n"
@@ -87,9 +86,14 @@ SHELLDOC = (
 #    MAIN PROGRAM
 #########################################################################
 
-def main(arguments):
+def main(arguments, DBURI=DBURI):
+    if arguments['--args']:
+        print arguments
+    if arguments['--use']:
+        DBURI = DBURI.replace('dopy', arguments['--use'])
+
     global db, tasks
-    db, tasks = database()
+    db, tasks = database(DBURI)
 
     if not any(arguments.values()):
         shell()
@@ -105,16 +109,19 @@ def main(arguments):
         print get(arguments)
     elif arguments['--args']:
         print arguments
+    elif arguments['note'] or arguments['show']:
+        print note(arguments)
     else:
         print arguments
 
-def database():
+def database(DBURI):
     _db = DAL(DBURI, folder=DBDIR)
     tasks = _db.define_table("dopy_tasks",
         Field("name", "string"),
         Field("tag", "string"),
         Field("status", "string"),
         Field("reminder", "string"),
+        Field("notes", "list:string"),
         Field("created_on", "datetime"),
         Field("deleted", "boolean", default=False),
     )
@@ -155,11 +162,25 @@ def ls(arguments):
 
     rows = db(query).select()
 
-    headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Created']]
+    headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Notes','Created']]
+    #if arguments['--n']:
+        #headers.append('Notes')
 
     table = [headers]
     for row in rows:
-        table.append([ID(str(row.id)), NAME(str(row.name)), TAG(str(row.tag)), STATUS(str(row.status)), str(row.reminder), str(row.created_on)])
+        fields = [ID(str(row.id)),
+                 NAME(str(row.name)),
+                 TAG(str(row.tag)),
+                 STATUS(str(row.status)),
+                 str(row.reminder),
+                 str(len(row.notes) if row.notes else 0),
+                 str(row.created_on.strftime("%d/%m-%H:%M"))]
+
+        #if arguments['--n']:
+            #fields.append(str( '\n'.join(row.notes) ))
+
+        table.append(fields)
+
     #pprint_table(sys.stdout, table)
     print_table(table)
 
@@ -173,6 +194,46 @@ def rm(arguments):
         return "%s deleted" % arguments['<id>']
     else:
         return "Task not found"
+
+def note(arguments):
+    task = tasks[arguments['<id>']]
+    if task:
+        task.notes = task.notes or []
+        if arguments['<note>']:
+            #actualnotes = task.notes or []
+            task.update_record(notes=task.notes + [arguments['<note>']])
+            db.commit()
+        if arguments['--rm']:
+            try:
+                del task.notes[int(arguments['--rm'])]
+                task.update_record(notes=task.notes)
+            except:
+                print REDBOLD("Note not found")
+            else:
+                db.commit()
+
+        lenmax = max([len(note) for note in task.notes ]) if task.notes else 20
+        out = "+----" + "-" * lenmax +  "-----+"
+
+        headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Created']]
+        fields = [ID(str(task.id)),
+                 NAME(str(task.name)),
+                 TAG(str(task.tag)),
+                 STATUS(str(task.status)),
+                 str(task.reminder),
+                 str(task.created_on.strftime("%d/%m-%H:%M"))]
+        print_table([headers, fields])
+
+        if task.notes:
+            print HEAD("NOTES:")
+            print out
+            cprint("\n".join( [ ID(str(i)) + " " + NOTE(note, i) for i, note in enumerate(task.notes)] ), 'blue', attrs=['bold'])
+            out +=    FOOTER("\n%s notes" % len(task.notes))
+            return out
+        else:
+            return ""
+    else:
+        return FOOTER("Task not found")
 
 def done(arguments):
     task = tasks[arguments['<id>']]
