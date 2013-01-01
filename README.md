@@ -214,7 +214,7 @@ Switching DBS
 
 It is possible to use more than one database by switching using ```--use``` argument
 
-```dopy add "Including on another db" --use=mynewdb
+```dopy add "Including on another db" --use=mynewdb```
 
 The above command will use a db called "mynewdb" (it will be created if not exists)
 
@@ -222,9 +222,8 @@ In the same way you have to specify the db for other operations
 
 ```dopy ls --all --use=mynewdb```  to list all tasks on the db
 
---------------
-Note, you can also change the default db in .dopyrc file
------------------
+> Note, you can also change the default db in .dopyrc file
+
 
 
 TODO
