@@ -35,16 +35,16 @@ Options:
 #    IMPORTS AND CONSTANTS
 #########################################################################
 from docopt import docopt
-from padnums import pprint_table
+#from padnums import pprint_table
 from printtable import print_table
 from dal import DAL, Field
 import os
-import sys
+#import sys
 import datetime
 from taskmodel import Task
 #from termcolor import colored, cprint
 from colors import *
-from pprint import pprint
+#from pprint import pprint
 
 try:
     from win32com.shell import shellcon, shell
@@ -151,7 +151,7 @@ def ls(arguments):
     #tag=None, search=None, date=None,
     #month=None, day=None, year=None
     query = tasks.deleted != True
-    query &= tasks.status != 'done' if not arguments['--all'] and not arguments['--status'] else tasks.id > 0
+    query &= ~tasks.status.belongs(['done', 'cancel', 'post']) if not arguments['--all'] and not arguments['--status'] else tasks.id > 0
     if arguments['--tag']:
         query &= tasks.tag == arguments['--tag']
     if arguments['--status']:
