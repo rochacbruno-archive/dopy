@@ -39,6 +39,8 @@ or
 
 **Maybe the pip option will not be working for a while**
 
+devel
+
 Usage
 ====
 
