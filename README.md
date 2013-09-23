@@ -232,3 +232,7 @@ TODO
 - Sync with google task
 - Sync with remember the milk
 - Generate HTML  and PDF reports on /tmp
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/rochacbruno/dopy/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
