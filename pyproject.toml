@@ -56,3 +56,38 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+
+[tool.pytest.ini_options]
+# Pytest configuration
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output options
+addopts = [
+    "-v",                    # Verbose output
+    "-ra",                   # Show summary of all test outcomes
+    "--showlocals",          # Show local variables in tracebacks
+    "--strict-markers",      # Strict markers
+]
+
+# Markers for categorizing tests
+markers = [
+    "unit: Unit tests that test individual components",
+    "integration: Integration tests that test multiple components together",
+    "slow: Tests that take a long time to run",
+    "requires_db: Tests that require database access",
+]
+
+# Warning filters
+filterwarnings = [
+    "ignore::SyntaxWarning",
+]
+
+# Console output format
+console_output_style = "progress"
+
+# Don't search these directories
+norecursedirs = [".git", ".venv", "__pycache__", "*.egg-info", "build", "dist"]
