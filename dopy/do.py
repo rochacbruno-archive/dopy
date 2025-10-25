@@ -8,43 +8,20 @@ r""" ____                     _
 |____/ \___(_) .__/ \__, (_)
              |_|    |___/
 
-
-Usage:
-  do.py [--use=<db>] [--args]
-  do.py add <name> [<tag>] [<status>] [--reminder=<reminder>] [--use=<db>] [--args]
-  do.py done <id> [--use=<db>] [--args]
-  do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>] [--use=<db>] [--args]
-  do.py rm <id> [--use=<db>] [--args]
-  do.py get <id> [--use=<db>] [--args]
-  do.py note <id> [--use=<db>] [--rm=<noteindex>] [--args]
-  do.py show <id> [--use=<db>] [--args]
-  do.py note <id> <note> [--use=<db>] [--args]
-  do.py export <path> [--format=<format>] [--use=<db>] [--args]
-  do.py setpath <path> [--args]
-  do.py use <db> [--args]
-  do.py -h | --help [--args]
-  do.py --version [--args]
-  do.py --args
-
-Options:
-  -h --help      Show this screen.
-  --version     Show version.
-  --args          Show args.
+Dopy - To-Do list on Command Line Interface
 """
-#########################################################################
-#    IMPORTS AND CONSTANTS
-#########################################################################
-from docopt import docopt
-#from .padnums import pprint_table
-from .printtable import print_table
+
+from typing import Optional
+import cyclopts
+from rich.console import Console
+from rich import print as rprint
+from .rich_table import print_table
 from .database import Database, FieldDef
 import os
-#import sys
 import datetime
 from .taskmodel import Task
-#from termcolor import colored, cprint
 from .colors import *
-#from pprint import pprint
+from .tui import run_tui
 
 try:
     from win32com.shell import shellcon, shell
@@ -74,47 +51,51 @@ else:
 DBDIR = CONFIG['dbdir']
 DBURI = CONFIG['dburi']
 
+console = Console()
 
-SHELLDOC = (
-  "USAGE:\n"
-  ">>> add('taskname', tag='', status='new|working|cancel|done|post', reminder='')\n"
-  "tasklist is a list of all tasks\n"
-  ">>> tasklist[0].name shows the name for task 1\n"
-  "" + Task.__doc__
-)
-#########################################################################
-#    MAIN PROGRAM
-#########################################################################
+# Global database connection
+db = None
+tasks = None
 
-def main(arguments, DBURI=DBURI):
-    if arguments['--args']:
-        print(arguments)
-    if arguments['--use']:
-        DBURI = DBURI.replace('dopy', arguments['--use'])
 
-    global db, tasks
-    db, tasks = database(DBURI)
+SHELLDOC = r"""
+     ____                     _
+    |  _ \  ___   _ __  _   _| |
+    | | | |/ _ \ | '_ \| | | | |
+    | |_| | (_) || |_) | |_| |_|
+    |____/ \___(_) .__/ \__, (_)
+                 |_|    |___/
 
-    if not any(arguments.values()):
-        shell()
-    elif arguments['add']:
-        print(add(arguments))
-    elif arguments['ls']:
-        print(ls(arguments))
-    elif arguments['rm']:
-        print(rm(arguments))
-    elif arguments['done']:
-        print(done(arguments))
-    elif arguments['get']:
-        print(get(arguments))
-    elif arguments['--args']:
-        print(arguments)
-    elif arguments['note'] or arguments['show']:
-        print(note(arguments))
-    else:
-        print(arguments)
+[Interactive Python REPL for Dopy]
+
+Available objects:
+  • tasklist  - List of all active Task objects
+  • db        - Database connection
+  • tasks     - Tasks table
+
+Quick examples:
+  >>> tasklist                    # Show all tasks
+  >>> tasklist[0].name            # Get first task name
+  >>> tasklist[0].update_status('done')  # Update task status
+  >>> [t.name for t in tasklist]  # List all task names
+
+Task management:
+  >>> task = tasklist[0]          # Get a task
+  >>> task.name                   # View property
+  >>> task.update_name("New")     # Update name
+  >>> task.add_note("A note")     # Add a note
+  >>> task.delete()               # Delete task
+
+Tips:
+  • Use Tab for auto-completion
+  • Use F2 to toggle between Vi/Emacs mode
+  • Use Ctrl+D or quit() to exit
+
+"""
+
 
 def database(DBURI):
+    """Initialize database connection."""
     _db = Database(DBURI, folder=DBDIR)
     tasks = _db.define_table("dopy_tasks",
         FieldDef("name", "string"),
@@ -127,140 +108,414 @@ def database(DBURI):
     )
     return _db, tasks
 
-def shell():
+
+def init_db(use_db: Optional[str] = None):
+    """Initialize global database connection."""
+    global db, tasks
+    dburi = DBURI
+    if use_db:
+        dburi = dburi.replace('dopy', use_db)
+    db, tasks = database(dburi)
+
+
+# Create the Cyclopts app
+app = cyclopts.App(
+    name="dopy",
+    help="Dopy - To-Do list on Command Line Interface",
+    version="0.3.0",
+)
+
+
+@app.default
+def tui_mode(use: Optional[str] = None):
+    """Launch the Textual TUI interface (default).
+
+    Args:
+        use: Database name to use (optional).
+    """
+    global db, tasks
+    init_db(use)
+    # Pass the initialized db and tasks to the TUI
+    try:
+        run_tui(db, tasks)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]TUI interrupted by user[/yellow]")
+    except Exception as e:
+        console.print(f"\n[red]Error running TUI: {e}[/red]")
+        console.print("[yellow]Your terminal should be restored.[/yellow]")
+        raise
+
+
+@app.command
+def shell(use: Optional[str] = None):
+    """Start interactive Python REPL with access to task list.
+
+    Args:
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
     global tasklist
     tasklist = []
     for task in db(tasks.deleted != True).select():
-        tasklist.append(Task(db, task))
-    import code
-    code.interact(local=globals(), banner=SHELLDOC)
+        tasklist.append(Task.from_row(db, task))
 
-def add(arguments):
-    #name, tag='default', status='new', reminder=None
+    # Try to use ptpython for a better REPL experience
+    try:
+        from ptpython.repl import embed
+        from ptpython.prompt_style import PromptStyle
+        from prompt_toolkit.formatted_text import HTML
+
+        # Custom prompt style
+        class DopyPromptStyle(PromptStyle):
+            def in_prompt(self):
+                return HTML('<ansigreen><b>dopy</b></ansigreen> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+
+            def in2_prompt(self, width):
+                return HTML('<ansigreen>...</ansigreen> ')
+
+            def out_prompt(self):
+                return HTML('<ansiyellow>Out</ansiyellow> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+
+        def configure(repl):
+            """Configure the ptpython REPL."""
+            # Enable syntax highlighting
+            repl.highlight_matching_parenthesis = True
+            repl.show_signature = True
+            repl.show_docstring = True
+            repl.show_meta_enter_message = True
+            repl.completion_visualisation = 'MULTI_COLUMN'
+            repl.enable_history_search = True
+            repl.enable_auto_suggest = True
+            repl.show_status_bar = True
+            repl.show_sidebar_help = True
+            repl.swap_light_and_dark = False
+
+            # Set custom prompt style
+            repl.all_prompt_styles['dopy'] = DopyPromptStyle()
+            repl.prompt_style = 'dopy'
+
+        # Print banner with Rich
+        console.print(SHELLDOC, style="cyan")
+        console.print(f"[green]Loaded {len(tasklist)} tasks[/green]\n")
+
+        # Start ptpython REPL
+        embed(globals(), locals(), configure=configure)
+
+    except ImportError:
+        # Fallback to standard REPL if ptpython is not available
+        import code
+        console.print(SHELLDOC, style="cyan")
+        console.print(f"[yellow]Note: Install ptpython for a better REPL experience[/yellow]\n")
+        code.interact(local=globals(), banner="")
+
+
+@app.command
+def add(
+    name: str,
+    tag: str = "default",
+    status: str = "new",
+    reminder: Optional[str] = None,
+    use: Optional[str] = None,
+):
+    """Add a new task.
+
+    Args:
+        name: Task name/description.
+        tag: Task tag/category (default: "default").
+        status: Task status (default: "new").
+        reminder: Optional reminder text.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
     created_on = datetime.datetime.now()
-    task = tasks.insert(name=arguments['<name>'],
-                tag=arguments.get('<tag>', 'default') or 'default',
-                status=arguments.get('<status>', 'new') or 'new',
-                reminder=arguments.get('--reminder', None),
-                created_on=created_on)
+    task_id = tasks.insert(
+        name=name,
+        tag=tag or 'default',
+        status=status or 'new',
+        reminder=reminder,
+        created_on=created_on
+    )
     db.commit()
-    return "Task %d inserted" % task
+    rprint(f"[green]Task {task_id} inserted[/green]")
 
-def ls(arguments):
-    # --all
-    #tag=None, search=None, date=None,
-    #month=None, day=None, year=None
+
+@app.command
+def ls(
+    all: bool = False,
+    tag: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    date: Optional[str] = None,
+    month: Optional[str] = None,
+    day: Optional[str] = None,
+    year: Optional[str] = None,
+    use: Optional[str] = None,
+):
+    """List tasks.
+
+    Args:
+        all: Show all tasks including done/cancelled.
+        tag: Filter by tag.
+        status: Filter by status.
+        search: Search in task names.
+        date: Filter by date.
+        month: Filter by month.
+        day: Filter by day.
+        year: Filter by year.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
     query = tasks.deleted != True
-    query &= ~tasks.status.belongs(['done', 'cancel', 'post']) if not arguments['--all'] and not arguments['--status'] else tasks.id > 0
-    if arguments['--tag']:
-        query &= tasks.tag == arguments['--tag']
-    if arguments['--status']:
-        query &= tasks.status == arguments['--status']
-    if arguments['--search']:
-        query &= tasks.name.like('%%%s%%' % arguments['--search'].lower())
+    query &= ~tasks.status.belongs(['done', 'cancel', 'post']) if not all and not status else tasks.id > 0
 
+    if tag:
+        query &= tasks.tag == tag
+    if status:
+        query &= tasks.status == status
+    if search:
+        query &= tasks.name.like('%%%s%%' % search.lower())
 
     rows = db(query).select()
 
     headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Notes','Created']]
-    #if arguments['--n']:
-        #headers.append('Notes')
-
     table = [headers]
+
     for row in rows:
-        fields = [ID(str(row.id)),
-                 NAME(str(row.name)),
-                 TAG(str(row.tag)),
-                 STATUS(str(row.status)),
-                 str(row.reminder),
-                 str(len(row.notes) if row.notes else 0),
-                 str(row.created_on.strftime("%d/%m-%H:%M"))]
-
-        #if arguments['--n']:
-            #fields.append(str( '\n'.join(row.notes) ))
-
+        fields = [
+            ID(str(row.id)),
+            NAME(str(row.name)),
+            TAG(str(row.tag)),
+            STATUS(str(row.status)),
+            str(row.reminder or ''),
+            str(len(row.notes) if row.notes else 0),
+            str(row.created_on.strftime("%d/%m-%H:%M"))
+        ]
         table.append(fields)
 
-    #pprint_table(sys.stdout, table)
     print_table(table)
 
-    return FOOTER("TOTAL:%s tasks" % len(rows) if rows else "NO TASKS FOUND\nUse --help to see the usage tips")
+    if rows:
+        console.print(f"[green]TOTAL: {len(rows)} tasks[/green]")
+    else:
+        console.print("[yellow]NO TASKS FOUND[/yellow]")
+        console.print("Use --help to see the usage tips")
 
-def rm(arguments):
-    task = tasks[arguments['<id>']]
+
+@app.command
+def rm(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Remove (soft delete) a task.
+
+    Args:
+        id: Task ID to remove.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
     if task:
         task.update_record(deleted=True)
         db.commit()
-        return "%s deleted" % arguments['<id>']
+        rprint(f"[green]Task {id} deleted[/green]")
     else:
-        return "Task not found"
+        rprint("[red]Task not found[/red]")
 
-def note(arguments):
-    task = tasks[arguments['<id>']]
-    if task:
-        task.notes = task.notes or []
-        if arguments['<note>']:
-            #actualnotes = task.notes or []
-            task.update_record(notes=task.notes + [arguments['<note>']])
-            db.commit()
-        if arguments['--rm']:
-            try:
-                del task.notes[int(arguments['--rm'])]
-                task.update_record(notes=task.notes)
-            except Exception:
-                print(REDBOLD("Note not found"))
-            else:
-                db.commit()
 
-        lenmax = max([len(note) for note in task.notes ]) if task.notes else 20
-        out = "+----" + "-" * lenmax +  "-----+"
+@app.command
+def done(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as done.
 
-        headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Created']]
-        fields = [ID(str(task.id)),
-                 NAME(str(task.name)),
-                 TAG(str(task.tag)),
-                 STATUS(str(task.status)),
-                 str(task.reminder),
-                 str(task.created_on.strftime("%d/%m-%H:%M"))]
-        print_table([headers, fields])
+    Args:
+        id: Task ID to mark as done.
+        use: Database name to use (optional).
+    """
+    init_db(use)
 
-        if task.notes:
-            print(HEAD("NOTES:"))
-            print(out)
-            cprint("\n".join( [ ID(str(i)) + " " + NOTE(note, i) for i, note in enumerate(task.notes)] ), 'blue', attrs=['bold'])
-            out +=    FOOTER("\n%s notes" % len(task.notes))
-            return out
-        else:
-            return ""
-    else:
-        return FOOTER("Task not found")
-
-def done(arguments):
-    task = tasks[arguments['<id>']]
+    task = tasks[id]
     if task:
         task.update_record(status='done')
         db.commit()
-        return "%s marked as done" % arguments['<id>']
+        rprint(f"[green]Task {id} marked as done[/green]")
     else:
-        return "Task not found"
+        rprint("[red]Task not found[/red]")
 
-def get(arguments):
-    row = tasks[arguments['<id>']]
+
+@app.command
+def get(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Interactive shell for a specific task.
+
+    Args:
+        id: Task ID to interact with.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    row = tasks[id]
     if row:
-        task = Task(db, row)
-        import code
-        code.interact(local=dict(task=task), banner=Task.__doc__)
-    else:
-        return "Not found"
+        task = Task.from_row(db, row)
 
-#########################################################################
-#    STARTUP
-#########################################################################
+        # Create a nice banner for single task editing
+        task_banner = f"""
+     ____                     _
+    |  _ \  ___   _ __  _   _| |
+    | | | |/ _ \ | '_ \| | | | |
+    | |_| | (_) || |_) | |_| |_|
+    |____/ \___(_) .__/ \__, (_)
+                 |_|    |___/
+
+[Interactive Task Editor - Task #{task.id}]
+
+Current task: {task.name}
+Tag: {task.tag} | Status: {task.status}
+
+Available methods:
+  • task.update_name("new name")     - Update task name
+  • task.update_status("done")       - Update status
+  • task.update_tag("work")          - Update tag
+  • task.add_note("note text")       - Add a note
+  • task.delete()                    - Delete this task
+
+Properties:
+  • task.name, task.tag, task.status, task.reminder, task.notes
+
+Tips:
+  • Use Tab for auto-completion
+  • Use Ctrl+D or quit() to exit
+"""
+
+        # Try to use ptpython for better experience
+        try:
+            from ptpython.repl import embed
+            from ptpython.prompt_style import PromptStyle
+            from prompt_toolkit.formatted_text import HTML
+
+            class DopyPromptStyle(PromptStyle):
+                def in_prompt(self):
+                    return HTML(f'<ansigreen><b>task[{task.id}]</b></ansigreen> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+
+                def in2_prompt(self, width):
+                    return HTML('<ansigreen>...</ansigreen> ')
+
+                def out_prompt(self):
+                    return HTML('<ansiyellow>Out</ansiyellow> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+
+            def configure(repl):
+                repl.highlight_matching_parenthesis = True
+                repl.show_signature = True
+                repl.show_docstring = True
+                repl.completion_visualisation = 'MULTI_COLUMN'
+                repl.enable_history_search = True
+                repl.enable_auto_suggest = True
+                repl.show_status_bar = True
+                repl.all_prompt_styles['dopy'] = DopyPromptStyle()
+                repl.prompt_style = 'dopy'
+
+            console.print(task_banner, style="cyan")
+            embed(globals(), locals(), configure=configure)
+
+        except ImportError:
+            import code
+            console.print(task_banner, style="cyan")
+            code.interact(local=dict(task=task), banner="")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def note(
+    id: int,
+    note: Optional[str] = None,
+    rm_index: Optional[int] = None,
+    use: Optional[str] = None,
+):
+    """Add or manage notes for a task.
+
+    Args:
+        id: Task ID.
+        note: Note text to add (optional).
+        rm_index: Index of note to remove (optional).
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.notes = task.notes or []
+
+        if note:
+            task.update_record(notes=task.notes + [note])
+            db.commit()
+
+        if rm_index is not None:
+            try:
+                del task.notes[rm_index]
+                task.update_record(notes=task.notes)
+                db.commit()
+            except Exception:
+                console.print("[bold red]Note not found[/bold red]")
+
+        # Show task with notes
+        show(id, use)
+    else:
+        console.print("[red]Task not found[/red]")
+
+
+@app.command
+def show(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Show a task with all its notes.
+
+    Args:
+        id: Task ID to show.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        lenmax = max([len(note) for note in task.notes]) if task.notes else 20
+        out = "+----" + "-" * lenmax + "-----+"
+
+        headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Created']]
+        fields = [
+            ID(str(task.id)),
+            NAME(str(task.name)),
+            TAG(str(task.tag)),
+            STATUS(str(task.status)),
+            str(task.reminder or ''),
+            str(task.created_on.strftime("%d/%m-%H:%M"))
+        ]
+        print_table([headers, fields])
+
+        if task.notes:
+            console.print("[bold cyan]NOTES:[/bold cyan]")
+            console.print(out)
+            from termcolor import cprint
+            cprint("\n".join([ID(str(i)) + " " + NOTE(note, i) for i, note in enumerate(task.notes)]), 'blue', attrs=['bold'])
+            console.print(f"[green]{len(task.notes)} notes[/green]")
+        else:
+            console.print("")
+    else:
+        console.print("[red]Task not found[/red]")
+
 
 def main_entry():
     """Entry point for console script."""
-    arguments = docopt(__doc__, version='Dopy 0.3')
-    main(arguments)
+    app()
+
 
 if __name__ == '__main__':
     main_entry()

@@ -25,7 +25,11 @@ classifiers = [
 
 dependencies = [
     "termcolor>=2.0.0",
-    "docopt>=0.6.2",
+    "cyclopts>=3.0.0",
+    "rich>=13.0.0",
+    "textual>=1.0.0",
+    "pydantic>=2.0.0",
+    "ptpython>=3.0.0",
 ]
 
 [project.urls]

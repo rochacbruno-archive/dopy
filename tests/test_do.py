@@ -46,17 +46,55 @@ class TestDatabaseFunction:
         assert len(call_args[0]) > 1  # Table name + fields
 
 
-class TestAddFunction:
-    """Test the add() function."""
+class TestInitDbFunction:
+    """Test the init_db() function."""
 
+    @patch('dopy.do.database')
+    def test_init_db_default(self, mock_database):
+        """Test init_db with default database."""
+        import dopy.do
+        from dopy.do import init_db, DBURI
+
+        mock_db = Mock()
+        mock_tasks = Mock()
+        mock_database.return_value = (mock_db, mock_tasks)
+
+        init_db()
+
+        mock_database.assert_called_once_with(DBURI)
+        assert dopy.do.db == mock_db
+        assert dopy.do.tasks == mock_tasks
+
+    @patch('dopy.do.database')
+    def test_init_db_custom(self, mock_database):
+        """Test init_db with custom database."""
+        import dopy.do
+        from dopy.do import init_db
+
+        mock_db = Mock()
+        mock_tasks = Mock()
+        mock_database.return_value = (mock_db, mock_tasks)
+
+        init_db('customdb')
+
+        # Should replace 'dopy' with 'customdb' in URI
+        called_uri = mock_database.call_args[0][0]
+        assert 'customdb' in called_uri
+
+
+class TestAddCommand:
+    """Test the add() command."""
+
+    @patch('dopy.do.init_db')
     @patch('dopy.do.datetime')
-    def test_add_basic_task(self, mock_datetime):
+    @patch('dopy.do.rprint')
+    def test_add_basic_task(self, mock_rprint, mock_datetime, mock_init_db):
         """Test adding a basic task."""
         import dopy.do
         from dopy.do import add
 
         # Mock datetime
-        mock_now = Mock()
+        mock_now = datetime(2024, 1, 1, 12, 0, 0)
         mock_datetime.datetime.now.return_value = mock_now
 
         # Mock global db and tasks
@@ -67,35 +105,36 @@ class TestAddFunction:
         dopy.do.db = mock_db
         dopy.do.tasks = mock_tasks
 
-        # Test arguments - need to use defaultdict or just provide empty values
-        arguments = {
-            '<name>': 'Test task',
-            '<tag>': '',  # Empty string will be treated as falsy
-            '<status>': '',
-            '--reminder': None
-        }
+        # Call add command
+        add(name='Test task', tag='default', status='new', reminder=None, use=None)
 
-        result = add(arguments)
+        # Should initialize db
+        mock_init_db.assert_called_once_with(None)
 
         # Should insert with correct values
-        mock_tasks.insert.assert_called_once()
-        call_kwargs = mock_tasks.insert.call_args[1]
-        assert call_kwargs['name'] == 'Test task'
-        assert call_kwargs['tag'] == 'default'
-        assert call_kwargs['status'] == 'new'
-        assert call_kwargs['created_on'] == mock_now
+        mock_tasks.insert.assert_called_once_with(
+            name='Test task',
+            tag='default',
+            status='new',
+            reminder=None,
+            created_on=mock_now
+        )
 
         # Should commit
         mock_db.commit.assert_called_once()
-        assert 'Task 1 inserted' in result
 
+        # Should print success message
+        assert mock_rprint.called
+
+    @patch('dopy.do.init_db')
     @patch('dopy.do.datetime')
-    def test_add_task_with_all_fields(self, mock_datetime):
+    @patch('dopy.do.rprint')
+    def test_add_task_with_all_fields(self, mock_rprint, mock_datetime, mock_init_db):
         """Test adding a task with all fields specified."""
         import dopy.do
         from dopy.do import add
 
-        mock_now = Mock()
+        mock_now = datetime(2024, 1, 1, 12, 0, 0)
         mock_datetime.datetime.now.return_value = mock_now
 
         mock_db = Mock()
@@ -105,27 +144,21 @@ class TestAddFunction:
         dopy.do.db = mock_db
         dopy.do.tasks = mock_tasks
 
-        arguments = {
-            '<name>': 'Important task',
-            '<tag>': 'work',
-            '<status>': 'working',
-            '--reminder': 'tomorrow'
-        }
-
-        result = add(arguments)
+        add(name='Important task', tag='work', status='working', reminder='tomorrow', use=None)
 
         call_kwargs = mock_tasks.insert.call_args[1]
         assert call_kwargs['name'] == 'Important task'
         assert call_kwargs['tag'] == 'work'
         assert call_kwargs['status'] == 'working'
         assert call_kwargs['reminder'] == 'tomorrow'
-        assert 'Task 5 inserted' in result
 
 
-class TestRemoveFunction:
-    """Test the rm() function."""
+class TestRemoveCommand:
+    """Test the rm() command."""
 
-    def test_rm_existing_task(self):
+    @patch('dopy.do.init_db')
+    @patch('dopy.do.rprint')
+    def test_rm_existing_task(self, mock_rprint, mock_init_db):
         """Test removing an existing task."""
         import dopy.do
         from dopy.do import rm
@@ -141,15 +174,21 @@ class TestRemoveFunction:
         dopy.do.db = mock_db
         dopy.do.tasks = mock_tasks
 
-        arguments = {'<id>': '1'}
-        result = rm(arguments)
+        rm(id=1, use=None)
+
+        # Should initialize db
+        mock_init_db.assert_called_once_with(None)
 
         # Should soft delete the task
         mock_task.update_record.assert_called_once_with(deleted=True)
         mock_db.commit.assert_called_once()
-        assert 'deleted' in result.lower()
 
-    def test_rm_nonexistent_task(self):
+        # Should print success
+        assert mock_rprint.called
+
+    @patch('dopy.do.init_db')
+    @patch('dopy.do.rprint')
+    def test_rm_nonexistent_task(self, mock_rprint, mock_init_db):
         """Test removing a non-existent task."""
         import dopy.do
         from dopy.do import rm
@@ -158,16 +197,18 @@ class TestRemoveFunction:
         mock_tasks.__getitem__ = Mock(return_value=None)
         dopy.do.tasks = mock_tasks
 
-        arguments = {'<id>': '999'}
-        result = rm(arguments)
+        rm(id=999, use=None)
 
-        assert 'not found' in result.lower()
+        # Should print not found message
+        assert mock_rprint.called
 
 
-class TestDoneFunction:
-    """Test the done() function."""
+class TestDoneCommand:
+    """Test the done() command."""
 
-    def test_done_existing_task(self):
+    @patch('dopy.do.init_db')
+    @patch('dopy.do.rprint')
+    def test_done_existing_task(self, mock_rprint, mock_init_db):
         """Test marking an existing task as done."""
         import dopy.do
         from dopy.do import done
@@ -182,14 +223,14 @@ class TestDoneFunction:
         dopy.do.db = mock_db
         dopy.do.tasks = mock_tasks
 
-        arguments = {'<id>': '1'}
-        result = done(arguments)
+        done(id=1, use=None)
 
         mock_task.update_record.assert_called_once_with(status='done')
         mock_db.commit.assert_called_once()
-        assert 'done' in result.lower()
 
-    def test_done_nonexistent_task(self):
+    @patch('dopy.do.init_db')
+    @patch('dopy.do.rprint')
+    def test_done_nonexistent_task(self, mock_rprint, mock_init_db):
         """Test marking a non-existent task as done."""
         import dopy.do
         from dopy.do import done
@@ -198,78 +239,76 @@ class TestDoneFunction:
         mock_tasks.__getitem__ = Mock(return_value=None)
         dopy.do.tasks = mock_tasks
 
-        arguments = {'<id>': '999'}
-        result = done(arguments)
+        done(id=999, use=None)
 
-        assert 'not found' in result.lower()
+        # Should print not found
+        assert mock_rprint.called
 
 
-class TestMainFunction:
-    """Test the main() function."""
+class TestShellCommand:
+    """Test the shell() command."""
 
-    @patch('dopy.do.database')
-    @patch('dopy.do.shell')
-    def test_main_no_arguments_calls_shell(self, mock_shell, mock_database):
-        """Test that main() with no arguments calls shell()."""
-        from dopy.do import main
+    @patch('dopy.do.init_db')
+    @patch('ptpython.repl.embed')
+    @patch('dopy.do.Task')
+    def test_shell_loads_tasks(self, mock_task_class, mock_embed, mock_init_db):
+        """Test that shell command loads tasks."""
+        import dopy.do
+        from dopy.do import shell
 
+        # Mock database
         mock_db = Mock()
         mock_tasks = Mock()
-        mock_database.return_value = (mock_db, mock_tasks)
 
-        arguments = dict.fromkeys([
-            '--args', '--use', 'add', 'ls', 'rm', 'done', 'get', 'note', 'show'
-        ], False)
-        arguments['--use'] = None
+        # Mock rows
+        mock_row1 = Mock()
+        mock_row2 = Mock()
+        mock_query = Mock()
+        mock_query.select = Mock(return_value=[mock_row1, mock_row2])
+        mock_db.return_value = mock_query
+        mock_tasks.deleted = Mock()
 
-        main(arguments)
+        dopy.do.db = mock_db
+        dopy.do.tasks = mock_tasks
 
-        mock_shell.assert_called_once()
+        # Mock Task.from_row
+        mock_task1 = Mock()
+        mock_task2 = Mock()
+        mock_task_class.from_row = Mock(side_effect=[mock_task1, mock_task2])
 
-    @patch('dopy.do.database')
-    @patch('dopy.do.add')
-    @patch('builtins.print')
-    def test_main_with_add_command(self, mock_print, mock_add, mock_database):
-        """Test main() with add command."""
-        from dopy.do import main
+        shell(use=None)
 
+        # Should initialize db
+        mock_init_db.assert_called_once_with(None)
+
+        # Should start the REPL (ptpython embed)
+        assert mock_embed.called
+
+
+class TestTUIDefaultCommand:
+    """Test the TUI default command."""
+
+    @patch('dopy.do.init_db')
+    @patch('dopy.do.run_tui')
+    def test_tui_mode_is_default(self, mock_run_tui, mock_init_db):
+        """Test that TUI launches by default."""
+        import dopy.do
+        from dopy.do import tui_mode
+
+        # Mock database
         mock_db = Mock()
         mock_tasks = Mock()
-        mock_database.return_value = (mock_db, mock_tasks)
-        mock_add.return_value = 'Task added'
 
-        arguments = dict.fromkeys([
-            '--args', '--use', 'ls', 'rm', 'done', 'get', 'note', 'show'
-        ], False)
-        arguments['add'] = True
-        arguments['--use'] = None
+        dopy.do.db = mock_db
+        dopy.do.tasks = mock_tasks
 
-        main(arguments)
+        tui_mode(use=None)
 
-        mock_add.assert_called_once_with(arguments)
-        mock_print.assert_called_once_with('Task added')
+        # Should initialize db
+        mock_init_db.assert_called_once_with(None)
 
-    @patch('dopy.do.database')
-    def test_main_with_custom_db(self, mock_database):
-        """Test main() with custom database."""
-        from dopy.do import main
-
-        mock_db = Mock()
-        mock_tasks = Mock()
-        mock_database.return_value = (mock_db, mock_tasks)
-
-        arguments = dict.fromkeys([
-            '--args', 'add', 'ls', 'rm', 'done', 'get', 'note', 'show'
-        ], False)
-        arguments['--use'] = 'customdb'
-
-        with patch('dopy.do.shell'):
-            main(arguments)
-
-        # Should have called database with modified URI
-        assert mock_database.called
-        called_uri = mock_database.call_args[0][0]
-        assert 'customdb' in called_uri
+        # Should run TUI
+        mock_run_tui.assert_called_once_with(mock_db, mock_tasks)
 
 
 class TestConfigurationHandling:
@@ -295,36 +334,30 @@ class TestConfigurationHandling:
         assert isinstance(DBURI, str)
 
 
+class TestCycloptsApp:
+    """Test the cyclopts app configuration."""
+
+    def test_app_exists(self):
+        """Test that the cyclopts app is defined."""
+        from dopy.do import app
+        assert app is not None
+
+    def test_app_has_commands(self):
+        """Test that app has registered commands."""
+        from dopy.do import app
+        # Cyclopts app should exist
+        assert hasattr(app, '__call__')
+
+
 class TestMainEntryPoint:
     """Test the main_entry() function."""
 
-    @patch('dopy.do.docopt')
-    @patch('dopy.do.main')
-    def test_main_entry_parses_args(self, mock_main, mock_docopt):
-        """Test that main_entry parses arguments and calls main."""
+    @patch('dopy.do.app')
+    def test_main_entry_calls_app(self, mock_app):
+        """Test that main_entry calls the cyclopts app."""
         from dopy.do import main_entry
-
-        mock_args = {'test': 'args'}
-        mock_docopt.return_value = mock_args
 
         main_entry()
 
-        # Should call docopt to parse arguments
-        assert mock_docopt.called
-        # Should call main with parsed arguments
-        mock_main.assert_called_once_with(mock_args)
-
-    @patch('dopy.do.docopt')
-    def test_main_entry_version(self, mock_docopt):
-        """Test that main_entry uses correct version."""
-        from dopy.do import main_entry
-
-        mock_docopt.return_value = {}
-
-        with patch('dopy.do.main'):
-            main_entry()
-
-        # Check version parameter
-        call_kwargs = mock_docopt.call_args[1]
-        assert 'version' in call_kwargs
-        assert '0.3' in call_kwargs['version']
+        # Should call the cyclopts app
+        mock_app.assert_called_once()

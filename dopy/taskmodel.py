@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-class Task(object):
+from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel, Field, field_validator
+
+
+class Task(BaseModel):
     """To show the task
 >>> print task
 To show a field (available name, tag, status, reminder)
@@ -14,58 +19,102 @@ To exit
 >>> quit()
 ######################################
 """
-    def __init__(self, db, row):
-        self.row = row
-        self.db = db
+    id: Optional[int] = None
+    name: str
+    tag: str = "default"
+    status: str = "new"
+    reminder: Optional[str] = None
+    notes: list[str] = Field(default_factory=list)
+    created_on: datetime = Field(default_factory=datetime.now)
+    deleted: bool = False
 
-    @property
-    def name(self):
-        return self.row.name
+    # Database connection for persistence (not part of the model data)
+    _db: Optional[object] = None
+    _row: Optional[object] = None
 
-    @name.setter
-    def name(self, value):
-        self.row.update_record(name=value)
-        self.db.commit()
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "from_attributes": True,
+    }
 
-    @property
-    def tag(self):
-        return self.row.tag
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        """Validate that status is one of the allowed values."""
+        valid_statuses = {'new', 'working', 'done', 'cancel', 'post'}
+        if v not in valid_statuses:
+            raise ValueError(f"Status must be one of {valid_statuses}")
+        return v
 
-    @tag.setter
-    def tag(self, value):
-        self.row.update_record(tag=value)
-        self.db.commit()
+    @classmethod
+    def from_row(cls, db, row) -> "Task":
+        """Create a Task instance from a database row."""
+        task = cls(
+            id=row.id,
+            name=row.name,
+            tag=row.tag,
+            status=row.status,
+            reminder=row.reminder,
+            notes=row.notes or [],
+            created_on=row.created_on,
+            deleted=row.deleted,
+        )
+        task._db = db
+        task._row = row
+        return task
 
-    @property
-    def status(self):
-        return self.row.status
+    def _update_db(self, **kwargs):
+        """Update the database with the given fields."""
+        if self._row is not None and self._db is not None:
+            self._row.update_record(**kwargs)
+            self._db.commit()
 
-    @status.setter
-    def status(self, value):
-        self.row.update_record(status=value)
-        self.db.commit()
+    def update_name(self, value: str):
+        """Update the task name."""
+        self.name = value
+        self._update_db(name=value)
 
-    @property
-    def reminder(self):
-        return self.row.reminder
+    def update_tag(self, value: str):
+        """Update the task tag."""
+        self.tag = value
+        self._update_db(tag=value)
 
-    @reminder.setter
-    def reminder(self, value):
-        self.row.update_record(reminder=value)
-        self.db.commit()
+    def update_status(self, value: str):
+        """Update the task status."""
+        self.status = value
+        self._update_db(status=value)
 
-    @property
-    def notes(self):
-        return self.row.notes
+    def update_reminder(self, value: Optional[str]):
+        """Update the task reminder."""
+        self.reminder = value
+        self._update_db(reminder=value)
 
-    @notes.setter
-    def notes(self, value):
-        self.row.update_record(notes=value)
-        self.db.commit()
+    def update_notes(self, value: list[str]):
+        """Update the task notes."""
+        self.notes = value
+        self._update_db(notes=value)
+
+    def add_note(self, note: str):
+        """Add a note to the task."""
+        self.notes.append(note)
+        self._update_db(notes=self.notes)
+
+    def remove_note(self, index: int):
+        """Remove a note by index."""
+        if 0 <= index < len(self.notes):
+            del self.notes[index]
+            self._update_db(notes=self.notes)
 
     def delete(self):
-        self.row.delete_record()
-        self.db.commit()
+        """Soft delete the task."""
+        self.deleted = True
+        if self._row is not None:
+            self._row.delete_record()
+            if self._db is not None:
+                self._db.commit()
 
     def __str__(self):
-        return str(self.row)
+        return f"Task(id={self.id}, name={self.name}, tag={self.tag}, status={self.status})"
+
+    def __repr__(self):
+        return self.__str__()
