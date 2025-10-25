@@ -28,7 +28,6 @@
 """
 Print table module. Draws ASCII boxes to pretty print lists.
 """
-import types
 import math
 
 __author__ = "rottmrei"
@@ -38,8 +37,8 @@ def print_table_row(row, top_border=False, bottom_border=False):
     """Prints columns of a single table row with ascii cell seperator and
     an optional top and/or bottom border line.
     """
-    if not type(row) == types.ListType:
-        print "ERROR: A line has to be of the type ListType."
+    if not isinstance(row, list):
+        print("ERROR: A line has to be of the type list.")
         return 1
     cc = "+"
     """corner char"""
@@ -65,10 +64,10 @@ def print_table_row(row, top_border=False, bottom_border=False):
         c += 1
     # now print table row
     if top_border:
-        print sep
-    print out
+        print(sep)
+    print(out)
     if bottom_border:
-        print sep
+        print(sep)
     return 0
 
 def print_table(rows):
@@ -76,8 +75,8 @@ def print_table(rows):
     The first row is assumed to be the heading line. The heading line
     and the last line of the table are printed with seperator lines.
     """
-    if not type(rows) == types.ListType:
-        print "ERROR: Table rows have to be of the type ListType."
+    if not isinstance(rows, list):
+        print("ERROR: Table rows have to be of the type list.")
         return 1
     r = 0
     """row counter"""
