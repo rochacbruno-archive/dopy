@@ -528,13 +528,12 @@ def get(
         task = Task.from_row(db, row)
 
         # Create a nice banner for single task editing
-        task_banner = f"""
-     ____                     _
-    |  _ \  ___   _ __  _   _| |
-    | | | |/ _ \ | '_ \| | | | |
-    | |_| | (_) || |_) | |_| |_|
-    |____/ \___(_) .__/ \__, (_)
-                 |_|    |___/
+        task_banner = rf"""
+     ____        _ _     _
+    |  _ \  ___ | (_)___| |_
+    | | | |/ _ \| | / __| __|
+    | |_| | (_) | | \__ \ |_
+    |____/ \___/|_|_|___/\__|
 
 [Interactive Task Editor - Task #{task.id}]
 
