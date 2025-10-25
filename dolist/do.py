@@ -80,9 +80,14 @@ if LEGACY_CONFIGFILE.exists() and not CONFIGFILE.exists():
 dir = "{BASEDIR}"
 # Database URI (default: sqlite://tasks.db)
 uri = "sqlite://tasks.db"
+
+[ui]
+# TUI theme (default: textual-dark)
+# Available themes: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, monokai, solarized-light, solarized-dark
+theme = "textual-dark"
 '''
         CONFIGFILE.write_text(toml_content)
-        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
         print(f"Migrated legacy config from {LEGACY_CONFIGFILE} to {CONFIGFILE}")
     except Exception as e:
         print(f"Warning: Could not migrate legacy config: {e}")
@@ -96,11 +101,12 @@ elif CONFIGFILE.exists():
             toml_config = tomllib.load(f)
         CONFIG = {
             'dbdir': toml_config.get('database', {}).get('dir', str(BASEDIR)),
-            'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db')
+            'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db'),
+            'theme': toml_config.get('ui', {}).get('theme', 'textual-dark')
         }
     except Exception as e:
         print(f"Warning: Could not load config file: {e}")
-        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
 else:
     # Create default TOML config
     default_config = f'''# DoList Configuration File
@@ -111,9 +117,14 @@ else:
 dir = "{BASEDIR}"
 # Database URI (default: sqlite://tasks.db)
 uri = "sqlite://tasks.db"
+
+[ui]
+# TUI theme (default: textual-dark)
+# Available themes: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, monokai, solarized-light, solarized-dark
+theme = "textual-dark"
 '''
     CONFIGFILE.write_text(default_config)
-    CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+    CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
 
 # Support legacy database location (~/.dopy/dopy.db)
 legacy_db_path = Path.home() / '.dopy' / 'dopy.db'
@@ -209,9 +220,13 @@ def tui_mode(use: Optional[str] = None):
     """
     global db, tasks
     init_db(use)
-    # Pass the initialized db and tasks to the TUI
+    # Pass the initialized db, tasks, and config to the TUI
+    tui_config = {
+        'theme': CONFIG.get('theme', 'textual-dark'),
+        'config_file': str(CONFIGFILE)
+    }
     try:
-        run_tui(db, tasks)
+        run_tui(db, tasks, tui_config)
     except KeyboardInterrupt:
         console.print("\n[yellow]TUI interrupted by user[/yellow]")
     except Exception as e:

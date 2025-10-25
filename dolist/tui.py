@@ -294,11 +294,13 @@ class DoListTUI(App):
         ("enter", "edit_task", "Edit"),
     ]
 
-    def __init__(self, db, tasks_table):
+    def __init__(self, db, tasks_table, config=None):
         super().__init__()
         self.db = db
         self._tasks_table = tasks_table  # Use underscore prefix to avoid conflicts
         self.current_filter = {"tag": None, "status": None, "search": None, "show_all": False}
+        self.config = config or {}
+        self.config_file = config.get('config_file') if config else None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -333,9 +335,58 @@ class DoListTUI(App):
 
     def on_mount(self) -> None:
         """Set up the table when the app starts."""
+        # Load theme from config
+        theme = self.config.get('theme', 'textual-dark')
+        self.theme = theme
+
         table = self.query_one("#tasks_table", DataTable)
         table.add_columns("ID", "Name", "Tag", "Status", "Reminder", "Notes", "Created")
         self.refresh_tasks()
+
+    def watch_theme(self, theme: str) -> None:
+        """Watch for theme changes and persist to config."""
+        if self.config_file and theme != self.config.get('theme'):
+            self._save_theme(theme)
+
+    def _save_theme(self, theme: str) -> None:
+        """Save the current theme to the config file."""
+        if not self.config_file:
+            return
+
+        try:
+            from pathlib import Path
+            config_path = Path(self.config_file)
+
+            if config_path.exists():
+                # Read current config
+                lines = config_path.read_text().split('\n')
+
+                # Update theme line
+                updated = False
+                for i, line in enumerate(lines):
+                    if line.strip().startswith('theme ='):
+                        lines[i] = f'theme = "{theme}"'
+                        updated = True
+                        break
+
+                # If theme line not found, add it to [ui] section
+                if not updated:
+                    for i, line in enumerate(lines):
+                        if line.strip() == '[ui]':
+                            # Find the next section or end of file
+                            j = i + 1
+                            while j < len(lines) and not lines[j].strip().startswith('['):
+                                j += 1
+                            lines.insert(j, f'theme = "{theme}"')
+                            updated = True
+                            break
+
+                if updated:
+                    config_path.write_text('\n'.join(lines))
+                    self.config['theme'] = theme
+        except Exception as e:
+            # Silently fail - don't interrupt the user experience
+            pass
 
     def refresh_tasks(self) -> None:
         """Refresh the task list."""
@@ -446,9 +497,15 @@ class DoListTUI(App):
         self.action_edit_task()
 
 
-def run_tui(db, tasks_table):
-    """Run the Textual TUI."""
-    app = DoListTUI(db, tasks_table)
+def run_tui(db, tasks_table, config=None):
+    """Run the Textual TUI.
+
+    Args:
+        db: Database connection
+        tasks_table: Tasks table object
+        config: Configuration dict with 'theme' and 'config_file' keys
+    """
+    app = DoListTUI(db, tasks_table, config)
     try:
         app.run()
     except Exception as e:

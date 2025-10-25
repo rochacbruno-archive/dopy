@@ -307,8 +307,15 @@ class TestTUIDefaultCommand:
         # Should initialize db
         mock_init_db.assert_called_once_with(None)
 
-        # Should run TUI
-        mock_run_tui.assert_called_once_with(mock_db, mock_tasks)
+        # Should run TUI with config
+        assert mock_run_tui.called
+        call_args = mock_run_tui.call_args
+        assert call_args[0][0] == mock_db
+        assert call_args[0][1] == mock_tasks
+        # Third argument should be config dict with theme
+        assert isinstance(call_args[0][2], dict)
+        assert 'theme' in call_args[0][2]
+        assert 'config_file' in call_args[0][2]
 
 
 class TestConfigurationHandling:
