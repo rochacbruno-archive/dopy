@@ -33,3 +33,27 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Database files
+*.db
+*.db-journal
+:memory:
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# macOS
+.DS_Store
+
+# uv
+.python-version

@@ -362,7 +362,7 @@ class Database:
         Initialize database connection.
 
         Args:
-            uri: Database URI like 'sqlite://dopy.db'
+            uri: Database URI like 'sqlite://dopy.db' or 'sqlite://:memory:'
             folder: Folder where database file is stored
         """
         # Parse URI
@@ -371,7 +371,12 @@ class Database:
         else:
             db_file = uri
 
-        db_path = os.path.join(folder, db_file)
+        # Handle in-memory database special case
+        if db_file == ':memory:':
+            db_path = ':memory:'
+        else:
+            db_path = os.path.join(folder, db_file)
+
         self.conn = sqlite3.connect(db_path)
         self.tables = {}
 
