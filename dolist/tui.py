@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Textual TUI for Dopy task management."""
+"""Textual TUI for DoList task management."""
 
 from datetime import datetime
 from textual.app import App, ComposeResult
@@ -234,8 +234,8 @@ class EditTaskScreen(ModalScreen):
                 self.app.refresh_tasks()
 
 
-class DopyTUI(App):
-    """A Textual TUI for Dopy task management."""
+class DoListTUI(App):
+    """A Textual TUI for DoList task management."""
 
     CSS = """
     Screen {
@@ -448,7 +448,7 @@ class DopyTUI(App):
 
 def run_tui(db, tasks_table):
     """Run the Textual TUI."""
-    app = DopyTUI(db, tasks_table)
+    app = DoListTUI(db, tasks_table)
     try:
         app.run()
     except Exception as e:
