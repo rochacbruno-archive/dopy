@@ -423,6 +423,94 @@ def done(
 
 
 @app.command
+def cancel(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as cancelled.
+
+    Args:
+        id: Task ID to mark as cancelled.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='cancel')
+        db.commit()
+        rprint(f"[yellow]Task {id} marked as cancelled[/yellow]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def working(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as working (in progress).
+
+    Args:
+        id: Task ID to mark as working.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='working')
+        db.commit()
+        rprint(f"[cyan]Task {id} marked as working[/cyan]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def post(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as posted.
+
+    Args:
+        id: Task ID to mark as posted.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='post')
+        db.commit()
+        rprint(f"[blue]Task {id} marked as posted[/blue]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def start(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as new (reset to initial state).
+
+    Args:
+        id: Task ID to mark as new.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='new')
+        db.commit()
+        rprint(f"[magenta]Task {id} marked as new[/magenta]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
 def get(
     id: int,
     use: Optional[str] = None,

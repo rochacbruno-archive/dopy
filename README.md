@@ -1,12 +1,14 @@
 DoList
 ======
 
-     ____        _ _     _
-    |  _ \  ___ | (_)___| |_
-    | | | |/ _ \| | / __| __|
-    | |_| | (_) | | \__ \ |_
-    |____/ \___/|_|_|___/\__|
-
+     ██████████            ████   ███           █████   
+    ░░███░░░░███          ░░███  ░░░           ░░███    
+     ░███   ░░███  ██████  ░███  ████   █████  ███████  
+     ░███    ░███ ███░░███ ░███ ░░███  ███░░  ░░░███░   
+     ░███    ░███░███ ░███ ░███  ░███ ░░█████   ░███    
+     ░███    ███ ░███ ░███ ░███  ░███  ░░░░███  ░███ ███
+     ██████████  ░░██████  █████ █████ ██████   ░░█████ 
+    ░░░░░░░░░░    ░░░░░░  ░░░░░ ░░░░░ ░░░░░░     ░░░░░  
 
 To Do list on Command Line Interface
 
@@ -117,13 +119,17 @@ DoList - To-Do list on Command Line Interface
 
 Commands:
   add        Add a new task.
+  cancel     Mark a task as cancelled.
   done       Mark a task as done.
   get        Interactive shell for a specific task.
   ls         List tasks.
   note       Add or manage notes for a task.
+  post       Mark a task as posted.
   rm         Remove (soft delete) a task.
   shell      Start interactive Python REPL.
   show       Show a task with all its notes.
+  start      Mark a task as new (reset to initial state).
+  working    Mark a task as working (in progress).
   --help -h  Display this message and exit.
   --version  Display application version.
 
@@ -250,11 +256,28 @@ List all tasks (including done/cancelled):
 dolist ls --all
 ```
 
-#### 5. Mark Task as Done
+#### 5. Change Task Status
+
+DoList provides dedicated commands for each status change:
 
 ```bash
+# Mark task as working (in progress)
+dolist working 2
+
+# Mark task as done
 dolist done 2
+
+# Mark task as cancelled
+dolist cancel 2
+
+# Mark task as posted
+dolist post 2
+
+# Reset task to new status
+dolist start 2
 ```
+
+Available statuses: `new`, `working`, `done`, `cancel`, `post`
 
 #### 6. Remove a Task
 
