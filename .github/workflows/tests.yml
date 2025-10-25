@@ -38,8 +38,8 @@ jobs:
 
     - name: Test installation
       run: |
-        uv run dopy --version
-        uv run dopy --help
+        uv run dolist --version
+        uv run dolist --help
 
   lint:
     name: Code Quality Checks
@@ -63,9 +63,9 @@ jobs:
       run: uv sync
 
     - name: Run ruff (linter)
-      run: uv run ruff check dopy/ --output-format=github
+      run: uv run ruff check dolist/ --output-format=github
       continue-on-error: true
 
     - name: Run black (formatter check)
-      run: uv run black --check dopy/
+      run: uv run black --check dolist/
       continue-on-error: true

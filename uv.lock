@@ -131,6 +131,7 @@ dependencies = [
     { name = "rich" },
     { name = "termcolor" },
     { name = "textual" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [package.dev-dependencies]
@@ -148,6 +149,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0.0" },
     { name = "termcolor", specifier = ">=2.0.0" },
     { name = "textual", specifier = ">=1.0.0" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.0" },
 ]
 
 [package.metadata.requires-dev]

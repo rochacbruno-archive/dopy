@@ -22,7 +22,17 @@ from .taskmodel import Task
 from .colors import *
 from .tui import run_tui
 from pathlib import Path
-import tomllib
+import sys
+
+# tomllib is only available in Python 3.11+, use tomli for older versions
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        # Fallback if tomli is not installed
+        tomllib = None
 
 # XDG Base Directory support with backwards compatibility
 def get_config_dir():
@@ -80,6 +90,8 @@ uri = "sqlite://tasks.db"
 elif CONFIGFILE.exists():
     # Load TOML config
     try:
+        if tomllib is None:
+            raise ImportError("TOML library not available")
         with open(CONFIGFILE, 'rb') as f:
             toml_config = tomllib.load(f)
         CONFIG = {
