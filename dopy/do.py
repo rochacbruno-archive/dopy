@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-""" ____                     _
+r""" ____                     _
 |  _ \  ___   _ __  _   _| |
 | | | |/ _ \ | '_ \| | | | |
 | |_| | (_) || |_) | |_| |_|
@@ -35,15 +35,15 @@ Options:
 #    IMPORTS AND CONSTANTS
 #########################################################################
 from docopt import docopt
-#from padnums import pprint_table
-from printtable import print_table
-from dal import DAL, Field
+#from .padnums import pprint_table
+from .printtable import print_table
+from .dal import DAL, Field
 import os
 #import sys
 import datetime
-from taskmodel import Task
+from .taskmodel import Task
 #from termcolor import colored, cprint
-from colors import *
+from .colors import *
 #from pprint import pprint
 
 try:
@@ -88,7 +88,7 @@ SHELLDOC = (
 
 def main(arguments, DBURI=DBURI):
     if arguments['--args']:
-        print arguments
+        print(arguments)
     if arguments['--use']:
         DBURI = DBURI.replace('dopy', arguments['--use'])
 
@@ -98,21 +98,21 @@ def main(arguments, DBURI=DBURI):
     if not any(arguments.values()):
         shell()
     elif arguments['add']:
-        print add(arguments)
+        print(add(arguments))
     elif arguments['ls']:
-        print ls(arguments)
+        print(ls(arguments))
     elif arguments['rm']:
-        print rm(arguments)
+        print(rm(arguments))
     elif arguments['done']:
-        print done(arguments)
+        print(done(arguments))
     elif arguments['get']:
-        print get(arguments)
+        print(get(arguments))
     elif arguments['--args']:
-        print arguments
+        print(arguments)
     elif arguments['note'] or arguments['show']:
-        print note(arguments)
+        print(note(arguments))
     else:
-        print arguments
+        print(arguments)
 
 def database(DBURI):
     _db = DAL(DBURI, folder=DBDIR)
@@ -207,8 +207,8 @@ def note(arguments):
             try:
                 del task.notes[int(arguments['--rm'])]
                 task.update_record(notes=task.notes)
-            except:
-                print REDBOLD("Note not found")
+            except Exception:
+                print(REDBOLD("Note not found"))
             else:
                 db.commit()
 
@@ -225,8 +225,8 @@ def note(arguments):
         print_table([headers, fields])
 
         if task.notes:
-            print HEAD("NOTES:")
-            print out
+            print(HEAD("NOTES:"))
+            print(out)
             cprint("\n".join( [ ID(str(i)) + " " + NOTE(note, i) for i, note in enumerate(task.notes)] ), 'blue', attrs=['bold'])
             out +=    FOOTER("\n%s notes" % len(task.notes))
             return out
@@ -257,6 +257,10 @@ def get(arguments):
 #    STARTUP
 #########################################################################
 
-if __name__ == '__main__':
-    arguments = docopt(__doc__, version='Dopy 0.2')
+def main_entry():
+    """Entry point for console script."""
+    arguments = docopt(__doc__, version='Dopy 0.3')
     main(arguments)
+
+if __name__ == '__main__':
+    main_entry()

@@ -17,82 +17,142 @@ optionally use your Dropbox to store the database
 
 ![image](https://raw.github.com/rochacbruno/dopy/master/dopy.png)
 
-Instalation
-====
-```pip install dopy```
+## Requirements
 
-or
+- Python 3.10 or higher
+- [uv](https://docs.astral.sh/uv/) package manager (recommended)
 
-```git clone https://github.com/rochacbruno/dopy```
+## Installation
 
-```cd dopy```
+### Option 1: Using uvx (recommended - no installation needed)
 
-```python setup.py install```
+Run directly from the repository without cloning:
 
-or
+```bash
+# Run dopy commands directly
+uvx --from git+https://github.com/rochacbruno/dopy dopy --help
+uvx --from git+https://github.com/rochacbruno/dopy dopy add "My first task"
+uvx --from git+https://github.com/rochacbruno/dopy dopy ls
+```
 
-```git clone https://github.com/rochacbruno/dopy```
+### Option 2: Clone and install with uv
 
-```chmod +x dopy/dopy/do.py```
+```bash
+# Clone the repository
+git clone https://github.com/rochacbruno/dopy
+cd dopy
 
-```sudo ln -s path/to/dopy/dopy/do.py /bin/dopy```
+# Install dependencies and set up the project
+uv sync
 
-**Maybe the pip option will not be working for a while**
+# Run dopy
+uv run dopy --help
+uv run dopy add "My task"
+uv run dopy ls
+```
 
-Usage
-====
+### Option 3: Development installation
 
+```bash
+# Clone the repository
+git clone https://github.com/rochacbruno/dopy
+cd dopy
+
+# Install in development mode
+uv pip install -e .
+
+# Now dopy is available as a command
+dopy --help
+dopy add "Development task"
+```
+
+### Legacy Installation (Python 2.7 - deprecated)
+
+The original Python 2.7 version can still be used, but is no longer maintained:
+
+```bash
+git clone https://github.com/rochacbruno/dopy
+cd dopy
+pip install -r requirements.txt
+python dopy/do.py --help
+```
+
+> **Note**: This package is not available on PyPI. Install directly from the GitHub repository using one of the methods above.
+
+## Usage
+
+```
      ____                     _
     |  _ \  ___   _ __  _   _| |
     | | | |/ _ \ | '_ \| | | | |
     | |_| | (_) || |_) | |_| |_|
     |____/ \___(_) .__/ \__, (_)
                  |_|    |___/
+```
 
+### Command Reference
 
-    Usage:
-      do.py [--use=<db>] [--args]
-      do.py add <name> [<tag>] [<status>] [--reminder=<reminder>] [--use=<db>] [--args]
-      do.py done <id> [--use=<db>] [--args]
-      do.py ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--date=<date>] [--month=<month>] [--day=<day>] [--year=<year>] [--use=<db>] [--args]
-      do.py rm <id> [--use=<db>] [--args]
-      do.py get <id> [--use=<db>] [--args]
-      do.py note <id> [--use=<db>] [--rm=<noteindex>] [--args]
-      do.py show <id> [--use=<db>] [--args]
-      do.py note <id> <note> [--use=<db>] [--args]
-      do.py export <path> [--format=<format>] [--use=<db>] [--args]
-      do.py setpath <path> [--args]
-      do.py use <db> [--args]
-      do.py -h | --help [--args]
-      do.py --version [--args]
-      do.py --args
+```bash
+Usage:
+  dopy [--use=<db>] [--args]
+  dopy add <name> [<tag>] [<status>] [--reminder=<reminder>] [--use=<db>]
+  dopy done <id> [--use=<db>]
+  dopy ls [--all] [--tag=<tag>] [--status=<status>] [--search=<term>] [--use=<db>]
+  dopy rm <id> [--use=<db>]
+  dopy get <id> [--use=<db>]
+  dopy note <id> [--use=<db>] [--rm=<noteindex>]
+  dopy show <id> [--use=<db>]
+  dopy note <id> <note> [--use=<db>]
+  dopy -h | --help
+  dopy --version
 
-    Options:
-      -h --help      Show this screen.
-      --version     Show version.
-      --args          Show args.
+Options:
+  -h --help      Show this screen
+  --version      Show version
+  --use=<db>     Use alternative database
+```
 
+> **Note**: If using `uvx`, prefix commands with `uvx --from git+https://github.com/rochacbruno/dopy`
+> If installed with `uv sync`, prefix commands with `uv run`
 
-1. to enter in SHELL mode
-```python do.py``` or simply ``dopy`` if installed
+### Quick Start Examples
 
-2. Add a new task
-dopy <name> <tag> <status> <reminder>
+#### 1. Interactive Shell Mode
 
-```dopy add "Pay the telephone bill" personal new --reminder=today```
+```bash
+# Using uvx
+uvx --from git+https://github.com/rochacbruno/dopy dopy
 
-with default values for tag, status and reminder
+# Or after cloning with uv sync
+uv run dopy
 
-```dopy add "Implement new features on my project"```
+# Or if installed globally
+dopy
+```
 
-3. List taks
+#### 2. Add a New Task
 
-List all open tasks
+With all fields specified:
 
-```dopy ls```
+```bash
+uv run dopy add "Pay the telephone bill" personal new --reminder=today
+```
 
-    $ python do.py ls
-    $ dopy ls
+With default values (tag=default, status=new, no reminder):
+
+```bash
+uv run dopy add "Implement new features on my project"
+```
+
+#### 3. List Tasks
+
+List all open tasks:
+
+```bash
+uv run dopy ls
+```
+
+Example output:
     +--+-----------------------------+--------+------+--------+-------------------+
     |ID|                         Name|     Tag|Status|Reminder|            Created|
     +--+-----------------------------+--------+------+--------+-------------------+
@@ -101,35 +161,49 @@ List all open tasks
     +--+-----------------------------+--------+------+--------+-------------------+
     TOTAL:2 tasks
 
-By tag
+Filter by tag:
 
-```dopy ls --tag=personal``
+```bash
+uv run dopy ls --tag=personal
+```
 
-By name
+Search by name:
 
-```dopy ls --search=phone```
+```bash
+uv run dopy ls --search=phone
+```
 
-By status
+Filter by status:
 
-```dopy ls --status=done```
+```bash
+uv run dopy ls --status=done
+```
 
-All
+List all tasks (including done/cancelled):
 
-```dopy ls --all```
+```bash
+uv run dopy ls --all
+```
 
-3. Mark as done
+#### 4. Mark Task as Done
 
-dopy done <id>
+```bash
+uv run dopy done 2
+```
 
-```dopy done 2```
+#### 5. Remove a Task
 
-4. Remove a task
+```bash
+uv run dopy rm 2
+```
 
-```dopy rm 2```
+#### 6. Edit a Task in Interactive Shell
 
-5. Get a task in shell mode for editing
+```bash
+uv run dopy get 3
+```
 
-```dopy get 3```
+Interactive session:
 
     $ dopy get 3
     To show the task
@@ -154,14 +228,15 @@ dopy done <id>
     >>>
 
 
-NOTES
-====
+## Managing Notes
 
-Doing a ```dopy ls``` you can see the ```ID``` of the tasks, using this ```ID``` you can assign notes
+You can add notes to tasks using their ID (visible in `dopy ls` output).
 
-1. Including a note
+### Adding a Note
 
-```dopy note 1 "This is the note for the task 1"```
+```bash
+uv run dopy note 1 "This is the note for the task 1"
+```
 
 The above command inserts the note and prints the TASK with notes.
 
@@ -176,11 +251,15 @@ The above command inserts the note and prints the TASK with notes.
     +------------------------------------+
     1 notes
 
-2. Consulting the notes
+### Viewing Notes
 
-You can also show all notes for a task using the show command
+Show all notes for a task:
 
-```dopy show 1```
+```bash
+uv run dopy show 1
+```
+
+Example output:
 
     +--+-----+-------+------+--------+-----------+
     |ID| Name|    Tag|Status|Reminder|    Created|
@@ -195,44 +274,109 @@ You can also show all notes for a task using the show command
     2 notes
 
 
-3. Removing a note
+### Removing a Note
 
-Notes can be removed by its index number.
+Notes can be removed by their index number.
 
-Example: To remove the latest note
+Remove the latest note:
 
-```dopy note 1 --rm=-1```
+```bash
+uv run dopy note 1 --rm=-1
+```
 
-where ```-1``` is the index for the last element in notes
+Remove the first note (index 0):
 
-To remove the first note
+```bash
+uv run dopy note 1 --rm=0
+```
 
-```dopy note 1 --rm=0```
+## Multiple Databases
 
-Switching DBS
-====
+You can use multiple databases by specifying the `--use` argument.
 
-It is possible to use more than one database by switching using ```--use``` argument
+Create/use a different database:
 
-```dopy add "Including on another db" --use=mynewdb```
+```bash
+uv run dopy add "Including on another db" --use=mynewdb
+```
 
-The above command will use a db called "mynewdb" (it will be created if not exists)
+This creates a new database called "mynewdb" if it doesn't exist.
 
-In the same way you have to specify the db for other operations
+List tasks from specific database:
 
-```dopy ls --all --use=mynewdb```  to list all tasks on the db
+```bash
+uv run dopy ls --all --use=mynewdb
+```
 
-> Note, you can also change the default db in .dopyrc file
+> **Note**: You can also change the default database in the `~/.dopyrc` configuration file.
 
+## Testing
 
+This project includes a comprehensive test suite. See [README_TESTS.md](README_TESTS.md) for details.
 
-TODO
-====
+```bash
+# Run all tests
+uv run pytest
 
-- Sync with google task
-- Sync with remember the milk
-- Generate HTML  and PDF reports on /tmp
+# Run with verbose output
+uv run pytest -v
+```
 
+**Test Coverage**: 87 tests covering all major components
+- Colors module (22 tests)
+- Print table module (33 tests)
+- Task model (18 tests)
+- Main application (14 tests)
 
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/rochacbruno/dopy/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+## Development
+
+### Project Structure
+
+```
+dopy/
+├── dopy/              # Main package
+│   ├── __init__.py    # Package initialization
+│   ├── do.py          # Main application & CLI
+│   ├── dal.py         # Database abstraction layer
+│   ├── taskmodel.py   # Task model
+│   ├── colors.py      # Color formatting
+│   └── printtable.py  # Table rendering
+├── tests/             # Test suite
+├── pyproject.toml     # Modern Python packaging
+├── pytest.ini         # Pytest configuration
+└── README_TESTS.md    # Testing documentation
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `uv run pytest`
+5. Submit a pull request
+
+### Python Version Support
+
+- **Python 3.10+**: Fully supported with modern packaging
+- **Python 2.7**: Legacy support (deprecated, not maintained)
+
+See [PYTHON3_MIGRATION.md](PYTHON3_MIGRATION.md) for migration details and known issues.
+
+## Known Issues
+
+⚠️ The vendored web2py DAL has compatibility issues with Python 3. Core functionality like listing tasks (`dopy ls`) may not work correctly. See [PYTHON3_MIGRATION.md](PYTHON3_MIGRATION.md) for details and recommended solutions.
+
+## License
+
+This project is open source. See the repository for license details.
+
+## Roadmap
+
+- [ ] Migrate to modern ORM (SQLAlchemy or pyDAL)
+- [ ] Fix Python 3 DAL compatibility
+- [ ] Sync with Google Tasks
+- [ ] Sync with Remember The Milk
+- [ ] Generate HTML and PDF reports
+- [ ] Add configuration management commands
+- [ ] Improve test coverage for integration tests
 

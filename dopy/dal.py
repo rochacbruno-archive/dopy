@@ -155,7 +155,10 @@ import datetime
 import threading
 import time
 import csv
-import cgi
+try:
+    import cgi
+except ImportError:
+    cgi = None
 import copy
 import socket
 import logging
@@ -178,6 +181,8 @@ if PYTHON_VERSION == 2:
     import copy_reg as copyreg
     hashlib_md5 = hashlib.md5
     bytes, unicode = str, unicode
+    basestring = basestring
+    xrange = xrange
 else:
     import pickle
     from io import StringIO as StringIO
@@ -185,6 +190,8 @@ else:
     long = int
     hashlib_md5 = lambda s: hashlib.md5(bytes(s,'utf8'))
     bytes, unicode = bytes, str
+    basestring = str
+    xrange = range
 
 CALLABLETYPES = (types.LambdaType, types.FunctionType,
                  types.BuiltinFunctionType,
@@ -646,6 +653,8 @@ class BaseAdapter(ConnectionPool):
         return table._id != None
 
     def adapt(self, obj):
+        if isinstance(obj, bytes):
+            obj = obj.decode('utf-8')
         return "'%s'" % obj.replace("'", "''")
 
     def smart_adapt(self, obj):
@@ -942,7 +951,7 @@ class BaseAdapter(ConnectionPool):
                     self.execute(query)
                     table._db.commit()
             if table._dbt:
-                tfile = self.file_open(table._dbt, 'w')
+                tfile = self.file_open(table._dbt, 'wb')
                 pickle.dump(sql_fields, tfile)
                 self.file_close(tfile)
                 if fake_migrate:
@@ -950,7 +959,7 @@ class BaseAdapter(ConnectionPool):
                 else:
                     logfile.write('success!\n')
         else:
-            tfile = self.file_open(table._dbt, 'r')
+            tfile = self.file_open(table._dbt, 'rb')
             try:
                 sql_fields_old = pickle.load(tfile)
             except EOFError:
@@ -985,9 +994,9 @@ class BaseAdapter(ConnectionPool):
             return k.lower(),v
         # make sure all field names are lower case to avoid
         # migrations because of case cahnge
-        sql_fields = dict(map(fix,sql_fields.iteritems()))
-        sql_fields_old = dict(map(fix,sql_fields_old.iteritems()))
-        sql_fields_aux = dict(map(fix,sql_fields_aux.iteritems()))
+        sql_fields = dict(map(fix,sql_fields.items()))
+        sql_fields_old = dict(map(fix,sql_fields_old.items()))
+        sql_fields_aux = dict(map(fix,sql_fields_aux.items()))
         if db._debug:
             logging.debug('migrating %s to %s' % (sql_fields_old,sql_fields))
 
@@ -1071,21 +1080,21 @@ class BaseAdapter(ConnectionPool):
                         # update table._dbt after alter table.
                         if db._adapter.commit_on_alter_table:
                             db.commit()
-                            tfile = self.file_open(table._dbt, 'w')
+                            tfile = self.file_open(table._dbt, 'wb')
                             pickle.dump(sql_fields_current, tfile)
                             self.file_close(tfile)
                             logfile.write('success!\n')
                     else:
                         logfile.write('faked!\n')
             elif metadata_change:
-                tfile = self.file_open(table._dbt, 'w')
+                tfile = self.file_open(table._dbt, 'wb')
                 pickle.dump(sql_fields_current, tfile)
                 self.file_close(tfile)
 
         if metadata_change and \
                 not (query and self.dbengine in ('mysql','oracle','firebird')):
             db.commit()
-            tfile = self.file_open(table._dbt, 'w')
+            tfile = self.file_open(table._dbt, 'wb')
             pickle.dump(sql_fields_current, tfile)
             self.file_close(tfile)
 
@@ -1779,7 +1788,7 @@ class BaseAdapter(ConnectionPool):
             else:
                 obj = str(obj)
         if not isinstance(obj,bytes):
-            obj = bytes(obj)
+            obj = obj.encode(self.db_codec) if isinstance(obj, str) else bytes(obj)
         try:
             obj.decode(self.db_codec)
         except:
@@ -2002,9 +2011,9 @@ class BaseAdapter(ConnectionPool):
         for tablename in virtualtables:
             ### new style virtual fields
             table = db[tablename]
-            fields_virtual = [(f,v) for (f,v) in table.iteritems()
+            fields_virtual = [(f,v) for (f,v) in table.items()
                               if isinstance(v,FieldVirtual)]
-            fields_lazy = [(f,v) for (f,v) in table.iteritems()
+            fields_lazy = [(f,v) for (f,v) in table.items()
                            if isinstance(v,FieldMethod)]
             if fields_virtual or fields_lazy:
                 for row in rowsobj.records:
@@ -6515,7 +6524,7 @@ class Row(object):
         elif custom_types:
             SERIALIZABLE_TYPES.append(custom_types)
         d = dict(self)
-        for k in copy.copy(d.keys()):
+        for k in list(d.keys()):
             v=d[k]
             if d[k] is None:
                 continue
@@ -6902,7 +6911,7 @@ class DAL(object):
     def import_table_definitions(self,path,migrate=False,fake_migrate=False):
         pattern = pjoin(path,self._uri_hash+'_*.table')
         for filename in glob.glob(pattern):
-            tfile = self._adapter.file_open(filename, 'r')
+            tfile = self._adapter.file_open(filename, 'rb')
             try:
                 sql_fields = pickle.load(tfile)
                 name = filename[len(pattern)-7:-6]
@@ -8603,7 +8612,7 @@ class Field(Expression):
     def store(self, file, filename=None, path=None):
         if self.custom_store:
             return self.custom_store(file,filename,path)
-        if isinstance(file, cgi.FieldStorage):
+        if cgi is not None and isinstance(file, cgi.FieldStorage):
             filename = filename or file.filename
             file = file.file
         elif not filename:
