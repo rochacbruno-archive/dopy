@@ -37,7 +37,7 @@ Options:
 from docopt import docopt
 #from .padnums import pprint_table
 from .printtable import print_table
-from .dal import DAL, Field
+from .database import Database, FieldDef
 import os
 #import sys
 import datetime
@@ -115,15 +115,15 @@ def main(arguments, DBURI=DBURI):
         print(arguments)
 
 def database(DBURI):
-    _db = DAL(DBURI, folder=DBDIR)
+    _db = Database(DBURI, folder=DBDIR)
     tasks = _db.define_table("dopy_tasks",
-        Field("name", "string"),
-        Field("tag", "string"),
-        Field("status", "string"),
-        Field("reminder", "string"),
-        Field("notes", "list:string"),
-        Field("created_on", "datetime"),
-        Field("deleted", "boolean", default=False),
+        FieldDef("name", "string"),
+        FieldDef("tag", "string"),
+        FieldDef("status", "string"),
+        FieldDef("reminder", "string"),
+        FieldDef("notes", "list:string"),
+        FieldDef("created_on", "datetime"),
+        FieldDef("deleted", "boolean", default=False),
     )
     return _db, tasks
 

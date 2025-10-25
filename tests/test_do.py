@@ -10,31 +10,31 @@ from datetime import datetime
 class TestDatabaseFunction:
     """Test the database() function."""
 
-    @patch('dopy.do.DAL')
-    def test_database_creates_dal_instance(self, mock_dal_class):
-        """Test that database() creates a DAL instance."""
+    @patch('dopy.do.Database')
+    def test_database_creates_dal_instance(self, mock_database_class):
+        """Test that database() creates a Database instance."""
         from dopy.do import database, DBDIR
 
         mock_db = Mock()
-        mock_dal_class.return_value = mock_db
+        mock_database_class.return_value = mock_db
         mock_db.define_table = Mock(return_value='tasks_table')
 
         db, tasks = database('sqlite://test.db')
 
-        # Should create DAL with correct parameters
-        mock_dal_class.assert_called_once_with('sqlite://test.db', folder=DBDIR)
+        # Should create Database with correct parameters
+        mock_database_class.assert_called_once_with('sqlite://test.db', folder=DBDIR)
         # Should define the tasks table
         assert mock_db.define_table.called
         assert db == mock_db
         assert tasks == 'tasks_table'
 
-    @patch('dopy.do.DAL')
-    def test_database_defines_correct_schema(self, mock_dal_class):
+    @patch('dopy.do.Database')
+    def test_database_defines_correct_schema(self, mock_database_class):
         """Test that database() defines correct table schema."""
-        from dopy.do import database, Field
+        from dopy.do import database, FieldDef
 
         mock_db = Mock()
-        mock_dal_class.return_value = mock_db
+        mock_database_class.return_value = mock_db
         mock_db.define_table = Mock(return_value='tasks_table')
 
         db, tasks = database('sqlite://test.db')
@@ -42,7 +42,7 @@ class TestDatabaseFunction:
         # Check the table definition
         call_args = mock_db.define_table.call_args
         assert call_args[0][0] == 'dopy_tasks'
-        # Should have Field objects in the call
+        # Should have FieldDef objects in the call
         assert len(call_args[0]) > 1  # Table name + fields
 
 
