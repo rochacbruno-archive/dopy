@@ -102,7 +102,7 @@ class Table:
 
     def __init__(self, db, name):
         self.db = db
-        self.name = name
+        self._name = name  # Use _name to avoid conflicts with 'name' field
         self._fields = {}
 
     def __getattr__(self, name):
@@ -115,7 +115,7 @@ class Table:
     def __getitem__(self, id):
         """Get a row by ID."""
         cursor = self.db.conn.execute(
-            f"SELECT * FROM {self.name} WHERE id = ?", (id,)
+            f"SELECT * FROM {self._name} WHERE id = ?", (id,)
         )
         row_data = cursor.fetchone()
         if row_data:
@@ -137,7 +137,7 @@ class Table:
 
         columns = ', '.join(processed_fields.keys())
         placeholders = ', '.join('?' * len(processed_fields))
-        query = f"INSERT INTO {self.name} ({columns}) VALUES ({placeholders})"
+        query = f"INSERT INTO {self._name} ({columns}) VALUES ({placeholders})"
 
         cursor = self.db.conn.execute(query, list(processed_fields.values()))
         self.db.conn.commit()
@@ -172,7 +172,7 @@ class Table:
 
         row = Row(data)
         row._db = self.db.conn
-        row._table = self.name
+        row._table = self._name
         return row
 
 
@@ -313,9 +313,9 @@ class Query:
         """Execute SELECT query and return rows."""
         if self.condition:
             where_clause, params = self.condition.to_sql()
-            query = f"SELECT * FROM {self.table.name} WHERE {where_clause}"
+            query = f"SELECT * FROM {self.table._name} WHERE {where_clause}"
         else:
-            query = f"SELECT * FROM {self.table.name}"
+            query = f"SELECT * FROM {self.table._name}"
             params = []
 
         cursor = self.db.conn.execute(query, params)
@@ -343,7 +343,7 @@ class Query:
         set_clause = ', '.join(f"{k} = ?" for k in processed_fields.keys())
         where_clause, where_params = self.condition.to_sql()
 
-        query = f"UPDATE {self.table.name} SET {set_clause} WHERE {where_clause}"
+        query = f"UPDATE {self.table._name} SET {set_clause} WHERE {where_clause}"
         params = list(processed_fields.values()) + where_params
 
         self.db.conn.execute(query, params)
