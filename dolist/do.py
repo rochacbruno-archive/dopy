@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 #-*- coding:utf-8 -*-
 
-r""" ____                     _
-|  _ \  ___   _ __  _   _| |
-| | | |/ _ \ | '_ \| | | | |
-| |_| | (_) || |_) | |_| |_|
-|____/ \___(_) .__/ \__, (_)
-             |_|    |___/
+r""" ____        _ _     _
+|  _ \  ___ | (_)___| |_
+| | | |/ _ \| | / __| __|
+| |_| | (_) | | \__ \ |_
+|____/ \___/|_|_|___/\__|
 
-Dopy - To-Do list on Command Line Interface
+DoList - To-Do list on Command Line Interface
 """
 
 from typing import Optional
@@ -22,31 +21,94 @@ import datetime
 from .taskmodel import Task
 from .colors import *
 from .tui import run_tui
+from pathlib import Path
+import tomllib
 
-try:
-    from win32com.shell import shellcon, shell
-    homedir = shell.SHGetFolderPath(0, shellcon.CSIDL_APPDATA, 0, 0)
-except ImportError:
-    homedir = os.path.expanduser("~")
+# XDG Base Directory support with backwards compatibility
+def get_config_dir():
+    """Get config directory with XDG support and backwards compatibility."""
+    # Check for XDG_CONFIG_HOME first (Linux/Unix standard)
+    xdg_config = os.getenv('XDG_CONFIG_HOME')
+    if xdg_config:
+        config_dir = Path(xdg_config) / 'dolist'
+    else:
+        # Default to ~/.config/dolist on Unix-like systems
+        config_dir = Path.home() / '.config' / 'dolist'
 
-BASEDIR = os.path.join(homedir, '.dopy')
+    # Backwards compatibility: check if old ~/.dopy exists
+    old_dir = Path.home() / '.dopy'
+    if old_dir.exists() and not config_dir.exists():
+        return old_dir
 
-if not os.path.exists(BASEDIR):
-    os.mkdir(BASEDIR)
+    return config_dir
 
-CONFIGFILE = os.path.join(homedir, '.dopyrc')
+def get_legacy_config_file():
+    """Get legacy config file path for backwards compatibility."""
+    return Path.home() / '.dopyrc'
 
-if not os.path.exists(CONFIGFILE):
-    default = dict(
-        dbdir=BASEDIR,
-        dburi="sqlite://dopy.db"
-    )
-    with open(CONFIGFILE, 'w') as conf:
-        conf.write(str(default))
+BASEDIR = get_config_dir()
 
-    CONFIG = default
+# Create config directory if it doesn't exist
+if not BASEDIR.exists():
+    BASEDIR.mkdir(parents=True, exist_ok=True)
+
+# New TOML config file
+CONFIGFILE = BASEDIR / 'config.toml'
+LEGACY_CONFIGFILE = get_legacy_config_file()
+
+# Migration and config loading
+if LEGACY_CONFIGFILE.exists() and not CONFIGFILE.exists():
+    # Migrate from legacy config
+    try:
+        legacy_config = eval(LEGACY_CONFIGFILE.read_text())
+        # Create new TOML config
+        toml_content = f'''# DoList Configuration File
+# This file uses TOML format
+
+[database]
+# Database directory (default: ~/.config/dolist or $XDG_CONFIG_HOME/dolist)
+dir = "{BASEDIR}"
+# Database URI (default: sqlite://tasks.db)
+uri = "sqlite://tasks.db"
+'''
+        CONFIGFILE.write_text(toml_content)
+        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+        print(f"Migrated legacy config from {LEGACY_CONFIGFILE} to {CONFIGFILE}")
+    except Exception as e:
+        print(f"Warning: Could not migrate legacy config: {e}")
+        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+elif CONFIGFILE.exists():
+    # Load TOML config
+    try:
+        with open(CONFIGFILE, 'rb') as f:
+            toml_config = tomllib.load(f)
+        CONFIG = {
+            'dbdir': toml_config.get('database', {}).get('dir', str(BASEDIR)),
+            'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db')
+        }
+    except Exception as e:
+        print(f"Warning: Could not load config file: {e}")
+        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
 else:
-    CONFIG = eval(open(CONFIGFILE).read())
+    # Create default TOML config
+    default_config = f'''# DoList Configuration File
+# This file uses TOML format
+
+[database]
+# Database directory (default: ~/.config/dolist or $XDG_CONFIG_HOME/dolist)
+dir = "{BASEDIR}"
+# Database URI (default: sqlite://tasks.db)
+uri = "sqlite://tasks.db"
+'''
+    CONFIGFILE.write_text(default_config)
+    CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+
+# Support legacy database location (~/.dopy/dopy.db)
+legacy_db_path = Path.home() / '.dopy' / 'dopy.db'
+if legacy_db_path.exists() and 'dopy.db' in CONFIG['dburi']:
+    # Use legacy database location
+    CONFIG['dbdir'] = str(Path.home() / '.dopy')
+    CONFIG['dburi'] = 'sqlite://dopy.db'
 
 DBDIR = CONFIG['dbdir']
 DBURI = CONFIG['dburi']
@@ -59,14 +121,13 @@ tasks = None
 
 
 SHELLDOC = r"""
-     ____                     _
-    |  _ \  ___   _ __  _   _| |
-    | | | |/ _ \ | '_ \| | | | |
-    | |_| | (_) || |_) | |_| |_|
-    |____/ \___(_) .__/ \__, (_)
-                 |_|    |___/
+     ____        _ _     _
+    |  _ \  ___ | (_)___| |_
+    | | | |/ _ \| | / __| __|
+    | |_| | (_) | | \__ \ |_
+    |____/ \___/|_|_|___/\__|
 
-[Interactive Python REPL for Dopy]
+[Interactive Python REPL for DoList]
 
 Available objects:
   • tasklist  - List of all active Task objects
@@ -97,7 +158,7 @@ Tips:
 def database(DBURI):
     """Initialize database connection."""
     _db = Database(DBURI, folder=DBDIR)
-    tasks = _db.define_table("dopy_tasks",
+    tasks = _db.define_table("dolist_tasks",
         FieldDef("name", "string"),
         FieldDef("tag", "string"),
         FieldDef("status", "string"),
@@ -114,15 +175,16 @@ def init_db(use_db: Optional[str] = None):
     global db, tasks
     dburi = DBURI
     if use_db:
-        dburi = dburi.replace('dopy', use_db)
+        # Replace database name in URI
+        dburi = dburi.replace('tasks', use_db).replace('dopy', use_db)
     db, tasks = database(dburi)
 
 
 # Create the Cyclopts app
 app = cyclopts.App(
-    name="dopy",
-    help="Dopy - To-Do list on Command Line Interface",
-    version="0.3.0",
+    name="dolist",
+    help="DoList - To-Do list on Command Line Interface",
+    version="0.4.0",
 )
 
 

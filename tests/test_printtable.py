@@ -2,7 +2,7 @@
 import pytest
 from io import StringIO
 import sys
-from dopy.printtable import (
+from dolist.printtable import (
     print_table_row,
     print_table,
     get_column,

@@ -1,12 +1,11 @@
-dopy
-====
+DoList
+======
 
-     ____                     _
-    |  _ \  ___   _ __  _   _| |
-    | | | |/ _ \ | '_ \| | | | |
-    | |_| | (_) || |_) | |_| |_|
-    |____/ \___(_) .__/ \__, (_)
-                 |_|    |___/
+     ____        _ _     _
+    |  _ \  ___ | (_)___| |_
+    | | | |/ _ \| | / __| __|
+    | |_| | (_) | | \__ \ |_
+    |____/ \___/|_|_|___/\__|
 
 
 To Do list on Command Line Interface
@@ -15,7 +14,7 @@ Manage to-do list on a shell-based interface with beautiful tables and optional 
 
 optionally use your Dropbox to store the database
 
-![image](https://raw.github.com/rochacbruno/dopy/master/dopy.png)
+![image](https://raw.github.com/rochacbruno/dolist/master/dolist.png)
 
 ## ✨ Features
 
@@ -37,67 +36,84 @@ optionally use your Dropbox to store the database
 
 ## Installation
 
-### Option 1: Using uvx (recommended - no installation needed)
+### Option 1: Using uvx from PyPI (⭐ Recommended)
 
-Run directly from the repository without cloning:
+The easiest way to use DoList is with `uvx` - no installation or cloning needed:
 
 ```bash
-# Run dopy commands directly
-uvx --from git+https://github.com/rochacbruno/dopy dopy --help
-uvx --from git+https://github.com/rochacbruno/dopy dopy add "My first task"
-uvx --from git+https://github.com/rochacbruno/dopy dopy ls
+# Run dolist commands directly from PyPI
+uvx dolist --help
+uvx dolist add "My first task"
+uvx dolist ls
+
+# Launch the interactive TUI
+uvx dolist
 ```
 
-### Option 2: Clone and install with uv
+This will automatically download and run the latest version from PyPI each time.
+
+### Option 2: Using uvx from GitHub
+
+Run the latest development version directly from GitHub:
+
+```bash
+# Run dolist commands from GitHub
+uvx --from git+https://github.com/rochacbruno/dolist dolist --help
+uvx --from git+https://github.com/rochacbruno/dolist dolist add "My first task"
+uvx --from git+https://github.com/rochacbruno/dolist dolist ls
+```
+
+### Option 3: Install with uv/pip
+
+For permanent installation:
+
+```bash
+# Install from PyPI
+uv pip install dolist
+
+# Or install from GitHub for latest development version
+uv pip install git+https://github.com/rochacbruno/dolist
+
+# Now dolist is available as a command
+dolist --help
+dolist add "My task"
+dolist ls
+```
+
+### Option 4: Development installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/rochacbruno/dopy
-cd dopy
+git clone https://github.com/rochacbruno/dolist
+cd dolist
 
 # Install dependencies and set up the project
 uv sync
 
-# Run dopy
-uv run dopy --help
-uv run dopy add "My task"
-uv run dopy ls
-```
+# Run dolist
+dolist --help
 
-### Option 3: Development installation
-
-```bash
-# Clone the repository
-git clone https://github.com/rochacbruno/dopy
-cd dopy
-
-# Install in development mode
+# Or install in development mode
 uv pip install -e .
-
-# Now dopy is available as a command
-dopy --help
-dopy add "Development task"
+dolist --help
 ```
-
-> **Note**: This package is not available on PyPI. Install directly from the GitHub repository using one of the methods above.
 
 ## Usage
 
 ```
-     ____                     _
-    |  _ \  ___   _ __  _   _| |
-    | | | |/ _ \ | '_ \| | | | |
-    | |_| | (_) || |_) | |_| |_|
-    |____/ \___(_) .__/ \__, (_)
-                 |_|    |___/
+     ____        _ _     _
+    |  _ \  ___ | (_)___| |_
+    | | | |/ _ \| | / __| __|
+    | |_| | (_) | | \__ \ |_
+    |____/ \___/|_|_|___/\__|
 ```
 
 ### Command Reference
 
 ```bash
-Usage: dopy COMMAND [ARGS]
+Usage: dolist COMMAND [ARGS]
 
-Dopy - To-Do list on Command Line Interface
+DoList - To-Do list on Command Line Interface
 
 Commands:
   add        Add a new task.
@@ -114,11 +130,10 @@ Commands:
 Parameters:
   USE --use  Database name to use (optional).
 
-Note: Running 'dopy' without a command launches the TUI by default.
+Note: Running 'dolist' without a command launches the TUI by default.
 ```
 
-> **Note**: If using `uvx`, prefix commands with `uvx --from git+https://github.com/rochacbruno/dopy`
-> If installed with `uv sync`, prefix commands with `uv run`
+> **Note**: Command examples below show direct `dolist` usage. If using `uvx`, prefix with `uvx dolist` (from PyPI) or `uvx --from git+https://github.com/rochacbruno/dolist dolist` (from GitHub)
 
 ### Quick Start Examples
 
@@ -127,14 +142,14 @@ Note: Running 'dopy' without a command launches the TUI by default.
 The beautiful terminal user interface launches by default:
 
 ```bash
-# Using uvx
-uvx --from git+https://github.com/rochacbruno/dopy dopy
+# Using uvx from PyPI (recommended)
+uvx dolist
 
-# Or after cloning with uv sync
-uv run dopy
+# Or from GitHub for latest development version
+uvx --from git+https://github.com/rochacbruno/dolist dolist
 
-# Or if installed globally
-dopy
+# Or if installed
+dolist
 ```
 
 Features of TUI mode:
@@ -152,7 +167,7 @@ Features of TUI mode:
 For advanced scripting and automation, launch the interactive Python shell:
 
 ```bash
-uv run dopy shell
+dolist shell
 ```
 
 Features of the modern REPL:
@@ -165,18 +180,18 @@ Features of the modern REPL:
 
 Example REPL session:
 ```python
-dopy >>> tasklist                           # View all tasks
+dolist >>> tasklist                           # View all tasks
 [Task(id=1, name='Test task'...), ...]
 
-dopy >>> tasklist[0].name                   # Get task name
+dolist >>> tasklist[0].name                   # Get task name
 'Test task for Python 3'
 
-dopy >>> tasklist[0].update_status('done')  # Update task
+dolist >>> tasklist[0].update_status('done')  # Update task
 
-dopy >>> [t.name for t in tasklist]         # List all names
+dolist >>> [t.name for t in tasklist]         # List all names
 ['Test task for Python 3', 'Batata', ...]
 
-dopy >>> quit()                             # Exit
+dolist >>> quit()                             # Exit
 ```
 
 #### 3. Add a New Task
@@ -184,13 +199,13 @@ dopy >>> quit()                             # Exit
 With all fields specified:
 
 ```bash
-uv run dopy add "Pay the telephone bill" --tag personal --status new --reminder today
+dolist add "Pay the telephone bill" --tag personal --status new --reminder today
 ```
 
 With default values (tag=default, status=new, no reminder):
 
 ```bash
-uv run dopy add "Implement new features on my project"
+dolist add "Implement new features on my project"
 ```
 
 #### 4. List Tasks
@@ -198,7 +213,7 @@ uv run dopy add "Implement new features on my project"
 List all open tasks:
 
 ```bash
-uv run dopy ls
+dolist ls
 ```
 
 Example output with Rich tables:
@@ -214,49 +229,49 @@ TOTAL: 2 tasks
 Filter by tag:
 
 ```bash
-uv run dopy ls --tag personal
+dolist ls --tag personal
 ```
 
 Search by name:
 
 ```bash
-uv run dopy ls --search phone
+dolist ls --search phone
 ```
 
 Filter by status:
 
 ```bash
-uv run dopy ls --status done
+dolist ls --status done
 ```
 
 List all tasks (including done/cancelled):
 
 ```bash
-uv run dopy ls --all
+dolist ls --all
 ```
 
 #### 5. Mark Task as Done
 
 ```bash
-uv run dopy done 2
+dolist done 2
 ```
 
 #### 6. Remove a Task
 
 ```bash
-uv run dopy rm 2
+dolist rm 2
 ```
 
 #### 7. Edit a Task in Interactive Shell
 
 ```bash
-uv run dopy get 3
+dolist get 3
 ```
 
 Interactive session with new Pydantic Task model:
 
 ```python
-$ dopy get 3
+$ dolist get 3
 To show the task
 >>> print task
 To show a field (available name, tag, status, reminder)
@@ -283,12 +298,12 @@ Task(id=3, name=Pay telephone bill, tag=personal, status=new)
 
 ## Managing Notes
 
-You can add notes to tasks using their ID (visible in `dopy ls` output).
+You can add notes to tasks using their ID (visible in `dolist ls` output).
 
 ### Adding a Note
 
 ```bash
-uv run dopy note 1 "This is the note for the task 1"
+dolist note 1 "This is the note for the task 1"
 ```
 
 The above command inserts the note and prints the TASK with notes.
@@ -311,7 +326,7 @@ NOTES:
 Show all notes for a task:
 
 ```bash
-uv run dopy show 1
+dolist show 1
 ```
 
 Example output:
@@ -336,7 +351,7 @@ NOTES:
 Notes can be removed by their index number using the `--rm-index` option:
 
 ```bash
-uv run dopy note 1 --rm-index 0
+dolist note 1 --rm-index 0
 ```
 
 ## Multiple Databases
@@ -346,7 +361,7 @@ You can use multiple databases by specifying the `--use` argument.
 Create/use a different database:
 
 ```bash
-uv run dopy add "Including on another db" --use mynewdb
+dolist add "Including on another db" --use mynewdb
 ```
 
 This creates a new database called "mynewdb" if it doesn't exist.
@@ -354,10 +369,10 @@ This creates a new database called "mynewdb" if it doesn't exist.
 List tasks from specific database:
 
 ```bash
-uv run dopy ls --all --use mynewdb
+dolist ls --all --use mynewdb
 ```
 
-> **Note**: You can also change the default database in the `~/.dopyrc` configuration file.
+> **Note**: You can also change the default database in the `~/.config/dolist/config.toml` configuration file.
 
 ## Testing
 
@@ -385,8 +400,8 @@ See [README_TESTS.md](README_TESTS.md) for detailed testing documentation.
 ### Project Structure
 
 ```
-dopy/
-├── dopy/              # Main package
+dolist/
+├── dolist/              # Main package
 │   ├── __init__.py    # Package initialization
 │   ├── do.py          # Main application & Cyclopts CLI
 │   ├── database.py    # Lightweight SQLite database wrapper
@@ -454,8 +469,9 @@ The CLI uses Cyclopts for:
 
 Uses a lightweight SQLite wrapper that:
 - Supports multiple databases via `--use` flag
-- Stores data in `~/.dopy/dopy.db` by default
-- Configuration in `~/.dopyrc`
+- Stores data in `~/.config/dolist/tasks.db` by default (or `$XDG_CONFIG_HOME/dolist/tasks.db`)
+- Configuration in `~/.config/dolist/config.toml` (TOML format)
+- Backwards compatible with legacy `~/.dopy/dopy.db` location
 
 ## License
 

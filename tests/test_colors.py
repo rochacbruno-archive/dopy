@@ -1,6 +1,6 @@
 """Tests for colors module."""
 import pytest
-from dopy.colors import HEAD, FOOTER, REDBOLD, BOLD, ID, NAME, TAG, NOTE, STATUS
+from dolist.colors import HEAD, FOOTER, REDBOLD, BOLD, ID, NAME, TAG, NOTE, STATUS
 
 
 class TestColorFunctions:

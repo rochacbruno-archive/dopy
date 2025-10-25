@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
 from pydantic import ValidationError
-from dopy.taskmodel import Task
+from dolist.taskmodel import Task
 
 
 class TestTaskModel:

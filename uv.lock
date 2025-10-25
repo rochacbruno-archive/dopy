@@ -121,8 +121,8 @@ wheels = [
 ]
 
 [[package]]
-name = "dopy"
-version = "0.3.0"
+name = "dolist"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "cyclopts" },

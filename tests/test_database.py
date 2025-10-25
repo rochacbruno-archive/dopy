@@ -3,7 +3,7 @@ import pytest
 import os
 import tempfile
 from datetime import datetime
-from dopy.database import Database, FieldDef, Table, Field, Row
+from dolist.database import Database, FieldDef, Table, Field, Row
 
 
 class TestTableFieldAccess:
