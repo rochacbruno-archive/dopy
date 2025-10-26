@@ -16,7 +16,7 @@ Manage to-do list on a shell-based interface with beautiful tables and optional 
 
 optionally use your Dropbox to store the database
 
-![image](https://raw.github.com/rochacbruno/dolist/master/dolist.png)
+![image](https://raw.github.com/rochacbruno/dolist/master/dolist.svg)
 
 ## ✨ Features
 
