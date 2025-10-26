@@ -496,6 +496,12 @@ Uses a lightweight SQLite wrapper that:
 - Configuration in `~/.config/dolist/config.toml` (TOML format)
 - Backwards compatible with legacy `~/.dopy/dopy.db` location
 
+
+![](list.png)
+![](shell.png)
+![](help.png)
+
+
 ## License
 
 This project is open source. See the repository for license details.
