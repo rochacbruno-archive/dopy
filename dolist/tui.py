@@ -22,6 +22,61 @@ from rich.text import Text
 from .reminder_parser import parse_reminder, format_reminder, get_time_until
 
 
+class ConfirmDeleteScreen(ModalScreen):
+    """Modal screen for confirming task deletion."""
+
+    def __init__(self, task_name: str, on_confirm):
+        super().__init__()
+        self.task_name = task_name
+        self.on_confirm = on_confirm
+
+    CSS = """
+    ConfirmDeleteScreen {
+        align: center middle;
+    }
+
+    #confirm_dialog {
+        width: 60%;
+        max-width: 60;
+        height: auto;
+        border: thick $error;
+        background: $surface;
+        padding: 1;
+    }
+
+    #confirm_dialog Label {
+        width: 100%;
+        text-align: center;
+        margin: 1 0;
+    }
+
+    #confirm_dialog Horizontal {
+        width: 100%;
+        align: center middle;
+    }
+
+    #confirm_dialog Button {
+        margin: 0 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Container(id="confirm_dialog"):
+            yield Label(f"Delete task?")
+            yield Label(f'"{self.task_name}"')
+            yield Label("This cannot be undone!")
+            with Horizontal():
+                yield Button("Delete", variant="error", id="confirm_delete_btn")
+                yield Button("Cancel", variant="default", id="cancel_delete_btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm_delete_btn":
+            self.on_confirm()
+            self.app.pop_screen()
+        elif event.button.id == "cancel_delete_btn":
+            self.app.pop_screen()
+
+
 class AddTaskScreen(ModalScreen):
     """Modal screen for adding a new task."""
 
@@ -35,26 +90,17 @@ class AddTaskScreen(ModalScreen):
     }
 
     #dialog {
-        width: 60;
+        width: 70%;
+        max-width: 80;
         height: auto;
-        border: thick $background 80%;
+        border: thick $primary;
         background: $surface;
-        padding: 1 2;
-    }
-
-    #dialog Input {
-        margin: 1 0;
-    }
-
-    #dialog Select {
-        margin: 1 0;
+        padding: 1;
     }
 
     #dialog Horizontal {
         width: 100%;
-        height: auto;
         align: center middle;
-        margin: 1 0;
     }
 
     #dialog Button {
@@ -74,8 +120,11 @@ class AddTaskScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label("Add New Task")
+            yield Label("Name:")
             yield Input(placeholder="Task name", id="name_input")
+            yield Label("Tag:")
             yield Input(placeholder="Tag (default: default)", id="tag_input")
+            yield Label("Status:")
             yield Select(
                 [
                     ("New", "new"),
@@ -85,12 +134,15 @@ class AddTaskScreen(ModalScreen):
                     ("Postponed", "post"),
                 ],
                 value="new",
+                allow_blank=False,
+                prompt="Select status",
                 id="status_select",
             )
+            yield Label("Reminder:")
             yield Input(placeholder="Reminder (optional)", id="reminder_input")
             with Horizontal():
-                yield Button("Add", variant="primary", id="add_btn")
-                yield Button("Cancel", variant="default", id="cancel_btn")
+                yield Button("Add", variant="primary", classes="tight", id="add_btn")
+                yield Button("Cancel", variant="default", classes="tight", id="cancel_btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel_btn":
@@ -147,31 +199,17 @@ class EditTaskScreen(ModalScreen):
     }
 
     #dialog {
-        width: 60;
+        width: 90%;
+        max-width: 100;
         height: auto;
-        border: thick $background 80%;
+        border: thick $primary;
         background: $surface;
-        padding: 1 2;
-    }
-
-    #dialog Input {
-        margin: 1 0;
-    }
-
-    #dialog Select {
-        margin: 1 0;
-    }
-
-    #dialog TextArea {
-        height: 6;
-        margin: 1 0;
+        padding: 1;
     }
 
     #dialog Horizontal {
         width: 100%;
-        height: auto;
         align: center middle;
-        margin: 1 0;
     }
 
     #dialog Button {
@@ -192,8 +230,11 @@ class EditTaskScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label(f"Edit Task #{self.task_row.id}")
+            yield Label("Name:")
             yield Input(value=self.task_row.name, placeholder="Task name", id="name_input")
+            yield Label("Tag:")
             yield Input(value=self.task_row.tag, placeholder="Tag", id="tag_input")
+            yield Label("Status:")
             yield Select(
                 [
                     ("New", "new"),
@@ -203,21 +244,25 @@ class EditTaskScreen(ModalScreen):
                     ("Postponed", "post"),
                 ],
                 value=self.task_row.status,
+                allow_blank=False,
+                prompt="Select status",
                 id="status_select",
             )
+            yield Label("Reminder:")
             yield Input(
                 value=self.task_row.reminder or "",
                 placeholder="Reminder (optional)",
                 id="reminder_input",
             )
+            yield Label("Notes:")
             notes_text = "\n".join(self.task_row.notes or [])
             yield TextArea(notes_text, id="notes_textarea")
             with Horizontal():
-                yield Button("Save", variant="primary", id="save_btn")
-                yield Button("Delay 10min", variant="warning", id="delay_reminder_btn")
-                yield Button("Clear Reminder", variant="warning", id="clear_reminder_btn")
-                yield Button("Delete", variant="error", id="delete_btn")
-                yield Button("Cancel", variant="default", id="cancel_btn")
+                yield Button("Save", variant="primary", classes="tight", id="save_btn")
+                yield Button("Cancel", variant="default", classes="tight", id="cancel_btn")
+            with Horizontal():
+                yield Button("Delay", variant="warning", classes="tight", id="delay_reminder_btn")
+                yield Button("Delete", variant="error", classes="tight", id="delete_btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel_btn":
@@ -243,20 +288,15 @@ class EditTaskScreen(ModalScreen):
             reminder_input.value = "delayed: 10 minutes"
 
             self.app.notify(f"Reminder delayed by 10 minutes", severity="information")
-        elif event.button.id == "clear_reminder_btn":
-            # Clear reminder
-            self.task_row.update_record(reminder=None, reminder_timestamp=None)
-            self.db.commit()
-            # Update the input field
-            reminder_input = self.query_one("#reminder_input", Input)
-            reminder_input.value = ""
-            self.app.notify("Reminder cleared", severity="information")
         elif event.button.id == "delete_btn":
-            self.task_row.update_record(deleted=True)
-            self.db.commit()
-            self.app.pop_screen()
-            if hasattr(self.app, "refresh_tasks"):
-                self.app.refresh_tasks()
+            def confirm_delete():
+                self.task_row.update_record(deleted=True)
+                self.db.commit()
+                self.app.pop_screen()
+                if hasattr(self.app, "refresh_tasks"):
+                    self.app.refresh_tasks()
+
+            self.app.push_screen(ConfirmDeleteScreen(self.task_row.name, confirm_delete))
         elif event.button.id == "save_btn":
             name_input = self.query_one("#name_input", Input)
             tag_input = self.query_one("#tag_input", Input)
@@ -274,12 +314,15 @@ class EditTaskScreen(ModalScreen):
             notes_text = notes_textarea.text
             notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
 
-            # Parse reminder
-            reminder_timestamp = None
-            if reminder:
-                parsed_dt, error = parse_reminder(reminder)
-                if not error:
-                    reminder_timestamp = parsed_dt
+            # Parse reminder only if it changed
+            reminder_timestamp = self.task_row.reminder_timestamp
+            if reminder != self.task_row.reminder:
+                # Reminder text changed, re-parse it
+                reminder_timestamp = None
+                if reminder:
+                    parsed_dt, error = parse_reminder(reminder)
+                    if not error:
+                        reminder_timestamp = parsed_dt
 
             # Update task
             self.task_row.update_record(
@@ -309,7 +352,20 @@ class DoListTUI(App):
     #main_container {
         width: 100%;
         height: 100%;
-        padding: 1;
+        padding: 0;
+    }
+
+    #status_buttons {
+        width: 100%;
+        height: 1;
+        padding: 0;
+    }
+
+    #status_buttons Button {
+        margin: 0 1 0 0;
+        min-width: 8;
+        height: 1;
+        border: none;
     }
 
     #tasks_table {
@@ -317,36 +373,18 @@ class DoListTUI(App):
         height: 1fr;
     }
 
-    #filter_container {
-        width: 100%;
-        height: auto;
-        padding: 0 0 1 0;
-    }
-
-    #filter_container Horizontal {
-        width: 100%;
-        height: auto;
-    }
-
-    #filter_container Input {
-        width: 1fr;
-        margin: 0 1 0 0;
-    }
-
-    #filter_container Select {
-        width: 20;
-        margin: 0 1 0 0;
-    }
-
     #button_container {
         width: 100%;
-        height: auto;
+        height: 1;
         align: center middle;
-        padding: 1 0 0 0;
+        padding: 0;
     }
 
     #button_container Button {
         margin: 0 1;
+        height: 1;
+        border: none;
+        min-width: 10;
     }
     """
 
@@ -365,35 +403,30 @@ class DoListTUI(App):
         self.config = config or {}
         self.config_file = config.get('config_file') if config else None
 
+        # Task 2: State for status filters
+        self.active_status_filters = set()  # Empty = show all active (not done/cancel)
+
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="main_container"):
-            with Vertical(id="filter_container"):
-                yield Label("Filters:")
-                with Horizontal():
-                    yield Input(placeholder="Search...", id="search_input")
-                    yield Select(
-                        [
-                            ("All Tags", None),
-                            ("default", "default"),
-                        ],
-                        value=None,
-                        id="tag_filter",
-                    )
-                    yield Select(
-                        [
-                            ("Active Only", False),
-                            ("All Statuses", True),
-                        ],
-                        value=False,
-                        id="show_all_filter",
-                    )
+            # Task 2: Status filter toggle buttons
+            with Horizontal(id="status_buttons"):
+                yield Button("All", variant="primary", classes="tight", id="status_all")
+                yield Button("New", variant="default", classes="tight", id="status_new")
+                yield Button("In Progress", variant="default", classes="tight", id="status_in-progress")
+                yield Button("Done", variant="default", classes="tight", id="status_done")
+                yield Button("Cancel", variant="default", classes="tight", id="status_cancel")
+                yield Button("Post", variant="default", classes="tight", id="status_post")
+
+            # Main task table - this should get focus
             yield DataTable(id="tasks_table", cursor_type="row")
+
+            # Bottom action buttons
             with Horizontal(id="button_container"):
-                yield Button("Add Task (a)", variant="primary", id="add_task_btn")
-                yield Button("Edit (Enter)", variant="default", id="edit_task_btn")
-                yield Button("Refresh (r)", variant="default", id="refresh_btn")
-                yield Button("Quit (Ctrl+Q)", variant="error", id="quit_btn")
+                yield Button("Add Task (a)", variant="primary", classes="tight", id="add_task_btn")
+                yield Button("Edit (Enter)", variant="default", classes="tight", id="edit_task_btn")
+                yield Button("Refresh (r)", variant="default", classes="tight", id="refresh_btn")
+                yield Button("Quit (Ctrl+Q)", variant="error", classes="tight", id="quit_btn")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -405,6 +438,9 @@ class DoListTUI(App):
         table = self.query_one("#tasks_table", DataTable)
         table.add_columns("ID", "Name", "Tag", "Status", "Reminder", "Notes", "Created")
         self.refresh_tasks()
+
+        # Focus the table by default (Task 1 requirement)
+        table.focus()
 
     def watch_theme(self, theme: str) -> None:
         """Watch for theme changes and persist to config."""
@@ -459,30 +495,24 @@ class DoListTUI(App):
         # Build query
         query = self._tasks_table.deleted != True
 
-        # Apply filters
-        if not self.current_filter["show_all"]:
+        # Task 2: Apply status filters
+        if self.active_status_filters:
+            # If specific statuses are selected, show only those
+            query &= self._tasks_table.status.belongs(list(self.active_status_filters))
+        else:
+            # Default: show active tasks (not done/cancel/post)
             query &= ~self._tasks_table.status.belongs(["done", "cancel", "post"])
 
-        if self.current_filter["tag"]:
+        # Legacy filter support (will be removed later)
+        if self.current_filter.get("tag"):
             query &= self._tasks_table.tag == self.current_filter["tag"]
 
-        if self.current_filter["search"]:
+        if self.current_filter.get("search"):
             search = self.current_filter["search"].lower()
             query &= self._tasks_table.name.like(f"%{search}%")
 
         # Get rows
         rows = self.db(query).select()
-
-        # Update tag filter options dynamically
-        all_tags = set()
-        for row in self.db(self._tasks_table.deleted != True).select():
-            all_tags.add(row.tag)
-
-        tag_filter = self.query_one("#tag_filter", Select)
-        tag_options = [("All Tags", None)]
-        for tag in sorted(all_tags):
-            tag_options.append((tag, tag))
-        # Note: Textual Select doesn't support dynamic options easily, skipping for now
 
         # Add rows to table
         now = datetime.now()
@@ -547,7 +577,44 @@ class DoListTUI(App):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
-        if event.button.id == "quit_btn":
+        # Task 2: Handle status filter toggle buttons
+        if event.button.id and event.button.id.startswith("status_"):
+            status = event.button.id.replace("status_", "")
+
+            # Handle "All" button - clear all filters
+            if status == "all":
+                self.active_status_filters.clear()
+                # Reset all status buttons to default
+                for btn_id in ["status_new", "status_in-progress", "status_done", "status_cancel", "status_post"]:
+                    try:
+                        btn = self.query_one(f"#{btn_id}", Button)
+                        btn.variant = "default"
+                    except:
+                        pass
+                # Set "All" button to primary
+                event.button.variant = "primary"
+                self.refresh_tasks()
+                return
+
+            # Handle individual status buttons
+            if status in self.active_status_filters:
+                # Remove from filter
+                self.active_status_filters.remove(status)
+                event.button.variant = "default"
+            else:
+                # Add to filter
+                self.active_status_filters.add(status)
+                event.button.variant = "primary"
+
+            # Update "All" button state
+            try:
+                all_btn = self.query_one("#status_all", Button)
+                all_btn.variant = "default" if self.active_status_filters else "primary"
+            except:
+                pass
+
+            self.refresh_tasks()
+        elif event.button.id == "quit_btn":
             self.action_quit()
         elif event.button.id == "add_task_btn":
             self.action_add_task()
@@ -555,21 +622,6 @@ class DoListTUI(App):
             self.action_edit_task()
         elif event.button.id == "refresh_btn":
             self.action_refresh()
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        """Handle input changes for filtering."""
-        if event.input.id == "search_input":
-            self.current_filter["search"] = event.value.strip() or None
-            self.refresh_tasks()
-
-    def on_select_changed(self, event: Select.Changed) -> None:
-        """Handle select changes for filtering."""
-        if event.select.id == "tag_filter":
-            self.current_filter["tag"] = event.value
-            self.refresh_tasks()
-        elif event.select.id == "show_all_filter":
-            self.current_filter["show_all"] = event.value
-            self.refresh_tasks()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection."""
