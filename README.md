@@ -229,15 +229,91 @@ dolist
 ```
 
 Features of TUI mode:
-- 📊 **Interactive table view** of tasks
+- 📊 **Interactive table view** of tasks with sortable columns
 - ✏️ **Add/Edit/Delete** tasks via modal dialogs
-- 🔍 **Filter** by tag, status, and search (type in the search box)
-- ⌨️ **Keyboard shortcuts**:
-  - `a` - Add new task
-  - `Enter` - Edit selected task
-  - `r` - Refresh task list
-  - `Ctrl+Q` - Quit
-  - `Esc` - Return to home (when in modal screens)
+- 🔍 **Advanced search** with vim-like `/` syntax
+- 📋 **Status filters** with toggle buttons
+- 🔄 **Auto-refresh** with configurable interval
+- 🎯 **Command palette** for quick actions
+- 💾 **State preservation** across refreshes
+
+#### Keyboard Shortcuts
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| `a` | Add Task | Open dialog to create new task |
+| `Enter` | Edit Task | Edit the selected task |
+| `/` | Search | Open vim-like search overlay |
+| `:` | Commands | Open command palette for sorting and actions |
+| `r` | Refresh | Manually refresh the task list |
+| `Ctrl+Q` | Quit | Exit the TUI |
+| `Esc` | Cancel | Close modals/overlays |
+
+#### Search Syntax
+
+The search overlay (`/`) supports powerful filtering:
+
+| Syntax | Example | Description |
+|--------|---------|-------------|
+| `text` | `/bug fix` | Filter tasks containing "bug fix" |
+| `tag=value` | `/tag=work` | Filter by single tag |
+| `tag=a,b` | `/tag=work,home` | Filter by multiple tags (OR logic) |
+| `status=value` | `/status=new` | Filter by single status |
+| `status=a,b` | `/status=new,done` | Filter by multiple statuses |
+| Combined | `/tag=work urgent` | Combine filters (tag=work AND text contains "urgent") |
+
+**Examples:**
+- `/bug` - Find all tasks with "bug" in the name
+- `/tag=urgent` - Show only tasks tagged "urgent"
+- `/status=new,in-progress` - Show new or in-progress tasks
+- `/tag=work test` - Show work tasks containing "test"
+
+#### Command Palette
+
+Press `:` to open the command palette with these commands:
+
+| Command | Description |
+|---------|-------------|
+| Sort by Name (A-Z) | Sort tasks alphabetically |
+| Sort by Name (Z-A) | Sort tasks reverse alphabetically |
+| Sort by Created (Oldest) | Sort by creation date (oldest first) |
+| Sort by Created (Newest) | Sort by creation date (newest first) |
+| Sort by Status | Sort by status |
+| Sort by Tag | Sort by tag |
+| Sort by ID | Sort by task ID |
+| Refresh | Manually refresh the task list |
+| Quit | Exit the TUI |
+
+#### Column Sorting
+
+Click on any column header to sort by that column:
+- First click: Sort ascending (▲)
+- Second click: Sort descending (▼)
+
+Sortable columns: ID, Name, Tag, Status, Created
+
+#### Status Filters
+
+Use the status filter buttons at the top to toggle task visibility:
+- **All** - Show all tasks (default shows active tasks only)
+- **New** - Show only new tasks
+- **In Progress** - Show only in-progress tasks
+- **Done** - Show completed tasks
+- **Cancel** - Show cancelled tasks
+- **Post** - Show postponed tasks
+
+Filters can be combined by clicking multiple buttons.
+
+#### Auto-Refresh
+
+Click the **Auto-Refresh** button to enable automatic task list updates every 30 seconds (configurable in `~/.config/dolist/config.toml`):
+
+```toml
+[tui]
+autorefresh_interval = 30  # seconds, 0 to disable
+```
+
+The button turns green when auto-refresh is enabled.
 
 #### 2. Interactive Python REPL (Enhanced with ptpython)
 
