@@ -146,15 +146,16 @@ dolist <id> [action] [args]
 - `start` - Mark as in-progress
 - `new` - Reset to new
 - `post` - Mark as postponed
-- `show` - Show task details
+- `show` - Show task details with notes
+- `edit` - Open TUI with task selected for editing
 - `clear-reminder` - Clear reminder
 - `delete`, `rm` - Delete task
 - `get` - Interactive Python shell for task
-- _(no action)_ - Interactive edit
+- _(no action)_ - Show task details
 
 **Examples:**
 ```bash
-dolist 1                           # Edit task 1 interactively
+dolist 1                           # Show task 1 details
 dolist 2 done                      # Mark task 2 as done
 dolist 3 remind tomorrow           # Set reminder (quoted or unquoted)
 dolist 3 remind 2 hours            # Unquoted multi-word args work!
@@ -176,7 +177,7 @@ DoList - To-Do list on Command Line Interface
 Core Commands:
   dolist                   # Launch interactive TUI (default)
   dolist --actions         # List all available actions
-  dolist <id>              # Interactive edit for task
+  dolist <id>              # Show task details
   dolist <id> <action>     # Perform action on task
   dolist add "Task"        # Add a new task
   dolist ls [OPTIONS]      # List tasks
@@ -395,10 +396,12 @@ dolist 2 delay 1 hour      # Delay reminder by 1 hour
 dolist 3 delay 30 mins     # Delay reminder by 30 minutes
 
 # Other quick actions
-dolist 1 show              # Show task details
+dolist 1                   # Show task 1 details
+dolist 1 show              # Show task details (same as above)
+dolist 1 edit              # Open TUI and edit task 1
 dolist 2 clear-reminder    # Clear reminder
 dolist 3 delete            # Delete task
-dolist 4                   # Interactive edit (same as 'dolist get 4')
+dolist 4 get               # Interactive Python shell for task 4
 ```
 
 **Unquoted Multi-Word Arguments** (✨ New!):
@@ -513,7 +516,7 @@ In the TUI, use the "Delay 10min" button in the edit dialog.
 
 ```bash
 # Clear reminder from a specific task
-dolist clear-reminder 5
+dolist 5 clear-reminder
 ```
 
 In the TUI, use the "Clear Reminder" button in the edit dialog.
@@ -594,35 +597,37 @@ subprocess.run([
 
 #### 9. Edit a Task in Interactive Shell
 
+For advanced task manipulation, you can use the interactive Python shell:
+
 ```bash
-dolist get 3
+dolist 3 get
 ```
 
-Interactive session with new Pydantic Task model:
+Interactive session with Pydantic Task model:
 
 ```python
-$ dolist get 3
+$ dolist 3 get
 To show the task
->>> print task
-To show a field (available name, tag, status, reminder)
->>> task.name
-To edit the task assign to a field using update methods
->>> task.update_name("Other name")
->>> task.update_status("working")
-To delete a task
->>> task.delete()
-To exit
->>> quit()
-######################################
-
 >>> print(task)
 Task(id=3, name=Pay telephone bill, tag=personal, status=new)
+
+To show a field (available: name, tag, status, reminder, notes)
+>>> task.name
+'Pay telephone bill'
 >>> task.status
 'new'
+
+To edit the task using update methods
+>>> task.update_name("Other name")
 >>> task.update_status("working")
 >>> task.status
 'working'
->>>
+
+To delete a task
+>>> task.delete()
+
+To exit
+>>> quit()
 ```
 
 
@@ -633,10 +638,10 @@ You can add notes to tasks using their ID (visible in `dolist ls` output).
 ### Adding a Note
 
 ```bash
-dolist note 1 "This is the note for the task 1"
+dolist 1 note "This is the note for task 1"
 ```
 
-The above command inserts the note and prints the TASK with notes.
+The above command inserts the note and prints the task with notes:
 
 ```
   ID   Name    Tag       Status   Reminder   Created
@@ -644,11 +649,9 @@ The above command inserts the note and prints the TASK with notes.
   1    teste   default   new                 01/01-02:14
 
 NOTES:
-+------------------------------------+
-0 This is the note for task 1
-+------------------------------------+
+  [0] This is the note for task 1
 
-1 notes
+Total: 1 note(s)
 ```
 
 ### Viewing Notes
@@ -656,7 +659,13 @@ NOTES:
 Show all notes for a task:
 
 ```bash
-dolist show 1
+dolist 1 show
+```
+
+Or simply:
+
+```bash
+dolist 1
 ```
 
 Example output:
@@ -667,21 +676,19 @@ Example output:
   1    teste   default   new                 01/01-02:14
 
 NOTES:
-+----------------------------------------+
-0 This is the note for task 1
-1 This is another note for task 1
-+----------------------------------------+
+  [0] This is the note for task 1
+  [1] This is another note for task 1
 
-2 notes
+Total: 2 note(s)
 ```
 
 
 ### Removing a Note
 
-Notes can be removed by their index number using the `--rm-index` option:
+Notes can be removed by their index number using the `--rm` flag:
 
 ```bash
-dolist note 1 --rm-index 0
+dolist 1 note --rm 0
 ```
 
 ## Multiple Databases
@@ -706,7 +713,7 @@ dolist ls --all --use mynewdb
 
 ## Testing
 
-This project includes a comprehensive test suite with **105 tests**, all passing!
+This project includes a comprehensive test suite with **127 tests**, all passing!
 
 ```bash
 # Run all tests
@@ -716,12 +723,13 @@ uv run pytest
 uv run pytest -v
 ```
 
-**Test Coverage**: 105 tests covering all major components
+**Test Coverage**: 127 tests covering all major components
 - ✅ Colors module (22 tests)
-- ✅ Database module (12 tests) - *New!*
+- ✅ Database module (12 tests)
 - ✅ Print table module (33 tests)
-- ✅ Task model with Pydantic (24 tests)
-- ✅ Main application with Cyclopts (14 tests)
+- ✅ Task model with Pydantic (18 tests)
+- ✅ Main application with Cyclopts (21 tests)
+- ✅ New CLI features (21 tests) - *New!*
 
 See [README_TESTS.md](README_TESTS.md) for detailed testing documentation.
 
@@ -740,12 +748,13 @@ dolist/
 │   ├── printtable.py  # Legacy table rendering
 │   ├── rich_table.py  # Rich table rendering
 │   └── tui.py         # Textual TUI application
-├── tests/             # Test suite (105 tests)
+├── tests/             # Test suite (127 tests)
 │   ├── test_colors.py      # Color function tests (22 tests)
 │   ├── test_database.py    # Database layer tests (12 tests)
 │   ├── test_printtable.py  # Table rendering tests (33 tests)
-│   ├── test_taskmodel.py   # Task model tests (24 tests)
-│   └── test_do.py          # Main app tests (14 tests)
+│   ├── test_taskmodel.py   # Task model tests (18 tests)
+│   ├── test_do.py          # Main app tests (21 tests)
+│   └── test_new_features.py # New CLI features tests (21 tests)
 ├── pyproject.toml     # Modern Python packaging
 ├── pytest.ini         # Pytest configuration
 └── README_TESTS.md    # Testing documentation
@@ -769,7 +778,7 @@ This project has been modernized with:
 2. Create a feature branch
 3. Make your changes
 4. Run tests: `uv run pytest`
-5. Ensure all 105 tests pass
+5. Ensure all 127 tests pass
 6. Submit a pull request
 
 ### Python Version Support
