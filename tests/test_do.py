@@ -155,17 +155,19 @@ class TestAddCommand:
 
 
 class TestRemoveCommand:
-    """Test the rm() command."""
+    """Test the remove/delete action via default_action."""
 
     @patch('dolist.do.init_db')
-    @patch('dolist.do.rprint')
-    def test_rm_existing_task(self, mock_rprint, mock_init_db):
+    @patch('dolist.do.console')
+    def test_rm_existing_task(self, mock_console, mock_init_db):
         """Test removing an existing task."""
         import dolist.do
-        from dolist.do import rm
+        from dolist.do import default_action
 
         # Mock task
         mock_task = Mock()
+        mock_task.id = 1
+        mock_task.name = "Test task"
         mock_task.update_record = Mock()
 
         mock_db = Mock()
@@ -175,7 +177,7 @@ class TestRemoveCommand:
         dolist.do.db = mock_db
         dolist.do.tasks = mock_tasks
 
-        rm(id=1, use=None)
+        default_action(1, 'delete')
 
         # Should initialize db
         mock_init_db.assert_called_once_with(None)
@@ -184,37 +186,36 @@ class TestRemoveCommand:
         mock_task.update_record.assert_called_once_with(deleted=True)
         mock_db.commit.assert_called_once()
 
-        # Should print success
-        assert mock_rprint.called
-
     @patch('dolist.do.init_db')
     @patch('dolist.do.rprint')
     def test_rm_nonexistent_task(self, mock_rprint, mock_init_db):
         """Test removing a non-existent task."""
         import dolist.do
-        from dolist.do import rm
+        from dolist.do import default_action
 
         mock_tasks = Mock()
         mock_tasks.__getitem__ = Mock(return_value=None)
         dolist.do.tasks = mock_tasks
 
-        rm(id=999, use=None)
+        default_action(999, 'delete')
 
-        # Should print not found message
+        # Should print not found message via rprint
         assert mock_rprint.called
 
 
 class TestDoneCommand:
-    """Test the done() command."""
+    """Test the done action via default_action."""
 
     @patch('dolist.do.init_db')
-    @patch('dolist.do.rprint')
-    def test_done_existing_task(self, mock_rprint, mock_init_db):
+    @patch('dolist.do.console')
+    def test_done_existing_task(self, mock_console, mock_init_db):
         """Test marking an existing task as done."""
         import dolist.do
-        from dolist.do import done
+        from dolist.do import default_action
 
         mock_task = Mock()
+        mock_task.id = 1
+        mock_task.name = "Test task"
         mock_task.update_record = Mock()
 
         mock_db = Mock()
@@ -224,7 +225,7 @@ class TestDoneCommand:
         dolist.do.db = mock_db
         dolist.do.tasks = mock_tasks
 
-        done(id=1, use=None)
+        default_action(1, 'done')
 
         mock_task.update_record.assert_called_once_with(status='done')
         mock_db.commit.assert_called_once()
@@ -234,13 +235,13 @@ class TestDoneCommand:
     def test_done_nonexistent_task(self, mock_rprint, mock_init_db):
         """Test marking a non-existent task as done."""
         import dolist.do
-        from dolist.do import done
+        from dolist.do import default_action
 
         mock_tasks = Mock()
         mock_tasks.__getitem__ = Mock(return_value=None)
         dolist.do.tasks = mock_tasks
 
-        done(id=999, use=None)
+        default_action(999, 'done')
 
         # Should print not found
         assert mock_rprint.called
@@ -294,7 +295,7 @@ class TestTUIDefaultCommand:
     def test_tui_mode_is_default(self, mock_run_tui, mock_init_db):
         """Test that TUI launches by default."""
         import dolist.do
-        from dolist.do import tui_mode
+        from dolist.do import default_action
 
         # Mock database
         mock_db = Mock()
@@ -303,7 +304,7 @@ class TestTUIDefaultCommand:
         dolist.do.db = mock_db
         dolist.do.tasks = mock_tasks
 
-        tui_mode(use=None)
+        default_action()
 
         # Should initialize db
         mock_init_db.assert_called_once_with(None)

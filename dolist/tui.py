@@ -402,6 +402,7 @@ class DoListTUI(App):
         self.current_filter = {"tag": None, "status": None, "search": None, "show_all": False}
         self.config = config or {}
         self.config_file = config.get('config_file') if config else None
+        self.selected_task_id = config.get('selected_task_id') if config else None
 
         # Task 2: State for status filters
         self.active_status_filters = set()  # Empty = show all active (not done/cancel)
@@ -441,6 +442,10 @@ class DoListTUI(App):
 
         # Focus the table by default (Task 1 requirement)
         table.focus()
+
+        # If a specific task was requested, select it and open edit screen
+        if self.selected_task_id is not None:
+            self._select_and_edit_task(self.selected_task_id)
 
     def watch_theme(self, theme: str) -> None:
         """Watch for theme changes and persist to config."""
@@ -486,6 +491,26 @@ class DoListTUI(App):
         except Exception as e:
             # Silently fail - don't interrupt the user experience
             pass
+
+    def _select_and_edit_task(self, task_id: int) -> None:
+        """Select a specific task in the table and open edit screen.
+
+        Args:
+            task_id: The ID of the task to select and edit.
+        """
+        table = self.query_one("#tasks_table", DataTable)
+
+        # Find the row with this task ID
+        for row_index, row_key in enumerate(table.rows):
+            row_data = table.get_row_at(row_index)
+            if row_data and str(row_data[0]) == str(task_id):
+                # Move cursor to this row using the move_cursor method
+                table.move_cursor(row=row_index)
+                # Open edit screen
+                task_row = self._tasks_table[task_id]
+                if task_row:
+                    self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
+                break
 
     def refresh_tasks(self) -> None:
         """Refresh the task list."""

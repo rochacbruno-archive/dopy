@@ -117,6 +117,7 @@ dolist --help
 **Most common operations:**
 ```bash
 dolist                      # Launch TUI
+dolist --actions            # List all available actions
 dolist add "Task name"      # Add task
 dolist ls                   # List active tasks
 dolist 1 done               # Mark task 1 as done
@@ -136,8 +137,10 @@ dolist <id> [action] [args]
 ```
 
 **Available actions:**
-- `remind <time>` - Set a reminder
+- `remind <time>` - Set a reminder (supports unquoted multi-word args)
 - `delay [time]` - Delay reminder (default: 10 minutes)
+- `note <text>` - Add a note (supports unquoted multi-word args)
+- `note --rm <index>` - Remove a note by index
 - `done` - Mark as done
 - `cancel` - Mark as cancelled
 - `start` - Mark as in-progress
@@ -146,49 +149,63 @@ dolist <id> [action] [args]
 - `show` - Show task details
 - `clear-reminder` - Clear reminder
 - `delete`, `rm` - Delete task
+- `get` - Interactive Python shell for task
 - _(no action)_ - Interactive edit
 
 **Examples:**
 ```bash
-dolist 1                   # Edit task 1 interactively
-dolist 2 done              # Mark task 2 as done
-dolist 3 remind tomorrow   # Set reminder on task 3
-dolist 3 delay 1 hour      # Delay reminder by 1 hour
-dolist 4 start             # Start working on task 4
-dolist 5 show              # Show details of task 5
+dolist 1                           # Edit task 1 interactively
+dolist 2 done                      # Mark task 2 as done
+dolist 3 remind tomorrow           # Set reminder (quoted or unquoted)
+dolist 3 remind 2 hours            # Unquoted multi-word args work!
+dolist 3 delay 1 hour              # Delay reminder by 1 hour
+dolist 4 start                     # Start working on task 4
+dolist 5 note This is my note      # Add note (unquoted!)
+dolist 5 note "Or use quotes"      # Or use quotes
+dolist 5 note --rm 0               # Remove first note
+dolist 6 show                      # Show details of task 6
 ```
 
-#### Classic Command Syntax
+#### Command Syntax
 
 ```bash
-Usage: dolist COMMAND [ARGS]
+Usage: dolist [ID] [ACTION] [ARGS] | dolist COMMAND [OPTIONS]
 
 DoList - To-Do list on Command Line Interface
 
-Commands:
-  add             Add a new task.
-  cancel          Mark a task as cancelled.
-  clear-reminder  Clear the reminder from a task.
-  done            Mark a task as done.
-  get             Interactive shell for a specific task.
-  in-progress     Mark a task as in-progress (alias for start).
-  ls              List tasks.
-  new             Mark a task as new (reset to initial state).
-  note            Add or manage notes for a task.
-  post            Mark a task as postponed/delayed.
-  reset           Reset the database (WARNING: deletes all tasks after creating a backup).
-  rm              Remove (soft delete) a task.
-  service         Run or manage the reminder service.
-  shell           Start interactive Python REPL.
-  show            Show a task with all its notes.
-  start           Mark a task as in-progress (start working on it).
-  --help -h       Display this message and exit.
-  --version       Display application version.
+Core Commands:
+  dolist                   # Launch interactive TUI (default)
+  dolist --actions         # List all available actions
+  dolist <id>              # Interactive edit for task
+  dolist <id> <action>     # Perform action on task
+  dolist add "Task"        # Add a new task
+  dolist ls [OPTIONS]      # List tasks
+  dolist shell             # Start Python REPL
+  dolist service           # Manage reminder service
+  dolist reset             # Reset database (with backup)
 
-Parameters:
-  USE --use  Database name to use (optional).
+List Options:
+  --all                    # Show all tasks (including done/cancelled)
+  --tag <tag>              # Filter by tag
+  --status <status>        # Filter by status
+  --search <term>          # Search in task names
+  --json                   # Output in JSON format
+  --action <action>        # Bulk action on matching tasks
+  --action-args <args>     # Arguments for bulk action
+  -y, --yes                # Skip confirmation for bulk actions
 
-Note: Running 'dolist' without a command launches the TUI by default.
+Bulk Actions:
+  dolist ls --status done --action delete          # Delete all done tasks
+  dolist ls --search "bug" --action start          # Start all tasks with "bug"
+  dolist ls --tag work --action remind --action-args "2 hours"
+  dolist ls --search "old" --action cancel -y      # Skip confirmation
+
+JSON Output:
+  dolist ls --json                                 # All tasks as JSON
+  dolist ls --status new --json | jq '.[].id'      # Extract IDs with jq
+  dolist ls --search "test" --json                 # Search results as JSON
+
+Note: Running 'dolist' without arguments launches the TUI by default.
 ```
 
 > **Note**: Command examples below show direct `dolist` usage. If using `uvx`, prefix with `uvx dolist` (from PyPI) or `uvx --from git+https://github.com/rochacbruno/dolist dolist` (from GitHub)
@@ -309,6 +326,52 @@ List all tasks (including done/cancelled):
 dolist ls --all
 ```
 
+**JSON Output** (✨ New!):
+
+Export tasks as JSON for scripting and integration:
+
+```bash
+# Export all active tasks as JSON
+dolist ls --json
+
+# Filter and export
+dolist ls --status new --json
+dolist ls --tag work --json
+dolist ls --search "bug" --json
+
+# Pipe to jq for processing
+dolist ls --json | jq '.[].id'                    # Extract all task IDs
+dolist ls --json | jq '.[] | select(.status == "new")'  # Filter in jq
+dolist ls --status new --json | jq -r '.[].name'   # Get task names only
+```
+
+**Bulk Actions** (✨ New!):
+
+Perform actions on multiple tasks at once with confirmation:
+
+```bash
+# Delete all done tasks
+dolist ls --status done --action delete
+
+# Mark all tasks with "bug" as in-progress
+dolist ls --search "bug" --action start
+
+# Set reminder on all work tasks
+dolist ls --tag work --action remind --action-args "tomorrow"
+
+# Postpone all tasks in a specific tag
+dolist ls --tag "low-priority" --action post
+
+# Cancel all tasks matching search
+dolist ls --search "cancelled meeting" --action cancel
+
+# Skip confirmation with --yes flag (use with caution!)
+dolist ls --status done --action delete --yes
+dolist ls --search "old" --action cancel -y
+```
+
+By default, bulk actions require typing 'yes' to confirm before execution. Use the `-y` or `--yes` flag to bypass the confirmation prompt.
+
 #### 5. Quick Task Actions with ID Shortcuts
 
 DoList provides an intuitive shortcut syntax: `dolist <id> <action> [args]`
@@ -338,14 +401,22 @@ dolist 3 delete            # Delete task
 dolist 4                   # Interactive edit (same as 'dolist get 4')
 ```
 
-**Classic command syntax** (still supported):
+**Unquoted Multi-Word Arguments** (✨ New!):
+
+You can now pass multi-word arguments without quotes:
+
 ```bash
-dolist start 2
-dolist in-progress 2
-dolist done 2
-dolist cancel 2
-dolist post 2
-dolist new 2
+# Reminders
+dolist 1 remind 2 hours           # No quotes needed!
+dolist 2 remind next week         # Works naturally
+dolist 3 delay 30 minutes         # Simple and intuitive
+
+# Notes
+dolist 4 note This is my amazing note     # No quotes required!
+dolist 5 note "Or use quotes if you prefer"
+
+# Manage notes
+dolist 5 note --rm 0              # Remove first note
 ```
 
 Available statuses: `new`, `in-progress`, `done`, `cancel`, `post`
