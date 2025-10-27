@@ -56,12 +56,12 @@ class TestTaskModel:
         task = Task(
             name='Direct Task',
             tag='personal',
-            status='working'
+            status='in-progress'
         )
 
         assert task.name == 'Direct Task'
         assert task.tag == 'personal'
-        assert task.status == 'working'
+        assert task.status == 'in-progress'
         assert task.notes == []
         assert task.deleted is False
 
@@ -292,19 +292,19 @@ class TestTaskEdgeCases:
         task = Task(
             name='Export Test',
             tag='work',
-            status='working'
+            status='in-progress'
         )
 
         data = task.model_dump()
 
         assert data['name'] == 'Export Test'
         assert data['tag'] == 'work'
-        assert data['status'] == 'working'
+        assert data['status'] == 'in-progress'
         assert isinstance(data, dict)
 
     def test_task_status_validation_all_valid_statuses(self):
         """Test all valid status values."""
-        valid_statuses = ['new', 'working', 'done', 'cancel', 'post']
+        valid_statuses = ['new', 'in-progress', 'done', 'cancel', 'post']
 
         for status in valid_statuses:
             task = Task(name='Test', status=status)

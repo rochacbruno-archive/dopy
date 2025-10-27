@@ -101,11 +101,11 @@ class TestStatusFunction:
         assert isinstance(result, str)
         assert 'post' in result
 
-    def test_status_working(self):
-        """Test STATUS with 'working' status."""
-        result = STATUS('working')
+    def test_status_in_progress(self):
+        """Test STATUS with 'in-progress' status."""
+        result = STATUS('in-progress')
         assert isinstance(result, str)
-        assert 'working' in result
+        assert 'in-progress' in result
 
     def test_status_unknown(self):
         """Test STATUS with unknown status."""

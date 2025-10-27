@@ -41,7 +41,7 @@ To exit
     @classmethod
     def validate_status(cls, v: str) -> str:
         """Validate that status is one of the allowed values."""
-        valid_statuses = {'new', 'working', 'done', 'cancel', 'post'}
+        valid_statuses = {'new', 'in-progress', 'done', 'cancel', 'post'}
         if v not in valid_statuses:
             raise ValueError(f"Status must be one of {valid_statuses}")
         return v

@@ -117,6 +117,7 @@ class TestAddCommand:
             tag='default',
             status='new',
             reminder=None,
+            reminder_timestamp=None,
             created_on=mock_now
         )
 

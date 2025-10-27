@@ -23,6 +23,10 @@ from .colors import *
 from .tui import run_tui
 from pathlib import Path
 import sys
+import shutil
+from .reminder_parser import parse_reminder, format_reminder, get_time_until
+from .service import install_systemd_service, run_service_loop, trigger_reminder
+import json
 
 # tomllib is only available in Python 3.11+, use tomli for older versions
 if sys.version_info >= (3, 11):
@@ -102,7 +106,8 @@ elif CONFIGFILE.exists():
         CONFIG = {
             'dbdir': toml_config.get('database', {}).get('dir', str(BASEDIR)),
             'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db'),
-            'theme': toml_config.get('ui', {}).get('theme', 'textual-dark')
+            'theme': toml_config.get('ui', {}).get('theme', 'textual-dark'),
+            'reminder_cmd': toml_config.get('reminders', {}).get('reminder_cmd')
         }
     except Exception as e:
         print(f"Warning: Could not load config file: {e}")
@@ -122,6 +127,12 @@ uri = "sqlite://tasks.db"
 # TUI theme (default: textual-dark)
 # Available themes: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, monokai, solarized-light, solarized-dark
 theme = "textual-dark"
+
+[reminders]
+# Custom command to handle reminders (optional)
+# If set, this command will be called with task JSON piped to stdin
+# If not set, uses notify-send by default
+# reminder_cmd = "/path/to/custom/reminder/handler"
 '''
     CONFIGFILE.write_text(default_config)
     CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
@@ -186,6 +197,7 @@ def database(DBURI):
         FieldDef("tag", "string"),
         FieldDef("status", "string"),
         FieldDef("reminder", "string"),
+        FieldDef("reminder_timestamp", "datetime"),
         FieldDef("notes", "list:string"),
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
@@ -313,17 +325,30 @@ def add(
         name: Task name/description.
         tag: Task tag/category (default: "default").
         status: Task status (default: "new").
-        reminder: Optional reminder text.
+        reminder: Optional reminder text (e.g., "today", "2 hours", "next week").
         use: Database name to use (optional).
     """
     init_db(use)
 
     created_on = datetime.datetime.now()
+    reminder_timestamp = None
+
+    # Parse reminder if provided
+    if reminder:
+        parsed_dt, error = parse_reminder(reminder)
+        if error:
+            rprint(f"[yellow]Warning: Could not parse reminder '{reminder}': {error}[/yellow]")
+            rprint("[yellow]Task will be created without a reminder timestamp.[/yellow]")
+        else:
+            reminder_timestamp = parsed_dt
+            rprint(f"[cyan]Reminder set for: {format_reminder(parsed_dt)}[/cyan]")
+
     task_id = tasks.insert(
         name=name,
         tag=tag or 'default',
         status=status or 'new',
         reminder=reminder,
+        reminder_timestamp=reminder_timestamp,
         created_on=created_on
     )
     db.commit()
@@ -372,13 +397,27 @@ def ls(
     headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Notes','Created']]
     table = [headers]
 
+    now = datetime.datetime.now()
     for row in rows:
+        # Format reminder display
+        reminder_display = ''
+        if row.reminder_timestamp:
+            # Check if reminder is in the past
+            if row.reminder_timestamp < now:
+                # Auto-clear past reminders
+                row.update_record(reminder=None, reminder_timestamp=None)
+                db.commit()
+                reminder_display = ''
+            else:
+                # Show time until reminder
+                reminder_display = get_time_until(row.reminder_timestamp)
+
         fields = [
             ID(str(row.id)),
             NAME(str(row.name)),
             TAG(str(row.tag)),
             STATUS(str(row.status)),
-            str(row.reminder or ''),
+            reminder_display,
             str(len(row.notes) if row.notes else 0),
             str(row.created_on.strftime("%d/%m-%H:%M"))
         ]
@@ -460,51 +499,51 @@ def cancel(
 
 
 @app.command
-def working(
-    id: int,
-    use: Optional[str] = None,
-):
-    """Mark a task as working (in progress).
-
-    Args:
-        id: Task ID to mark as working.
-        use: Database name to use (optional).
-    """
-    init_db(use)
-
-    task = tasks[id]
-    if task:
-        task.update_record(status='working')
-        db.commit()
-        rprint(f"[cyan]Task {id} marked as working[/cyan]")
-    else:
-        rprint("[red]Task not found[/red]")
-
-
-@app.command
-def post(
-    id: int,
-    use: Optional[str] = None,
-):
-    """Mark a task as posted.
-
-    Args:
-        id: Task ID to mark as posted.
-        use: Database name to use (optional).
-    """
-    init_db(use)
-
-    task = tasks[id]
-    if task:
-        task.update_record(status='post')
-        db.commit()
-        rprint(f"[blue]Task {id} marked as posted[/blue]")
-    else:
-        rprint("[red]Task not found[/red]")
-
-
-@app.command
 def start(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as in-progress (start working on it).
+
+    Args:
+        id: Task ID to mark as in-progress.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='in-progress')
+        db.commit()
+        rprint(f"[cyan]Task {id} marked as in-progress[/cyan]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command(name="in-progress")
+def in_progress(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as in-progress (alias for start).
+
+    Args:
+        id: Task ID to mark as in-progress.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='in-progress')
+        db.commit()
+        rprint(f"[cyan]Task {id} marked as in-progress[/cyan]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def new(
     id: int,
     use: Optional[str] = None,
 ):
@@ -520,7 +559,29 @@ def start(
     if task:
         task.update_record(status='new')
         db.commit()
-        rprint(f"[magenta]Task {id} marked as new[/magenta]")
+        rprint(f"[green]Task {id} marked as new[/green]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def post(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Mark a task as postponed/delayed.
+
+    Args:
+        id: Task ID to mark as postponed.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(status='post')
+        db.commit()
+        rprint(f"[blue]Task {id} marked as postponed[/blue]")
     else:
         rprint("[red]Task not found[/red]")
 
@@ -688,8 +749,324 @@ def show(
         console.print("[red]Task not found[/red]")
 
 
+@app.command
+def clear_reminder(
+    id: int,
+    use: Optional[str] = None,
+):
+    """Clear the reminder from a task.
+
+    Args:
+        id: Task ID to clear reminder from.
+        use: Database name to use (optional).
+    """
+    init_db(use)
+
+    task = tasks[id]
+    if task:
+        task.update_record(reminder=None, reminder_timestamp=None)
+        db.commit()
+        rprint(f"[green]Reminder cleared from task {id}[/green]")
+    else:
+        rprint("[red]Task not found[/red]")
+
+
+@app.command
+def service(
+    enable: bool = False,
+    remind: bool = False,
+    use: Optional[str] = None,
+):
+    """Run or manage the reminder service.
+
+    Args:
+        enable: Install and enable as systemd service.
+        remind: Process a reminder (reads task JSON from stdin).
+        use: Database name to use (optional).
+    """
+    if enable:
+        # Install systemd service
+        console.print("[bold cyan]Installing DoList Reminder Service[/bold cyan]")
+        if install_systemd_service():
+            console.print("[green]Service installed successfully![/green]")
+        else:
+            console.print("[red]Service installation failed[/red]")
+            sys.exit(1)
+        return
+
+    if remind:
+        # Process reminder from stdin
+        try:
+            task_json = sys.stdin.read()
+            task_data = json.loads(task_json)
+            trigger_reminder(task_data, CONFIG)
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Invalid JSON input: {e}[/red]")
+            sys.exit(1)
+        except Exception as e:
+            console.print(f"[red]Error processing reminder: {e}[/red]")
+            sys.exit(1)
+        return
+
+    # Default: run service loop
+    init_db(use)
+    console.print("[bold green]Starting DoList Reminder Service[/bold green]")
+    console.print(f"[cyan]Using database: {DBURI}[/cyan]")
+    run_service_loop(db, tasks, CONFIG)
+
+
+@app.command
+def reset(
+    use: Optional[str] = None,
+    yes: bool = False,
+):
+    """Reset the database (WARNING: deletes all tasks after creating a backup).
+
+    Args:
+        use: Database name to use (optional).
+        yes: Skip confirmation prompt (use with caution).
+    """
+    init_db(use)
+
+    # Get the database file path
+    dburi = DBURI
+    if use:
+        dburi = dburi.replace('tasks', use).replace('dopy', use)
+
+    # Extract database filename from URI (e.g., sqlite://tasks.db -> tasks.db)
+    db_filename = dburi.replace('sqlite://', '')
+    db_path = Path(DBDIR) / db_filename
+
+    if not db_path.exists():
+        console.print(f"[yellow]Database file not found: {db_path}[/yellow]")
+        console.print("[yellow]Nothing to reset.[/yellow]")
+        return
+
+    # Confirmation
+    if not yes:
+        console.print(f"[bold red]WARNING: This will delete all tasks from {db_path}[/bold red]")
+        console.print("[yellow]A timestamped backup will be created before deletion.[/yellow]")
+        confirmation = input("\nType 'yes' to confirm: ").strip().lower()
+        if confirmation != 'yes':
+            console.print("[green]Reset cancelled.[/green]")
+            return
+
+    # Create timestamped backup
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = Path(DBDIR) / f"{db_filename}.backup_{timestamp}"
+
+    try:
+        shutil.copy2(db_path, backup_path)
+        console.print(f"[green]Backup created: {backup_path}[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to create backup: {e}[/red]")
+        console.print("[red]Reset aborted for safety.[/red]")
+        return
+
+    # Delete the database file
+    try:
+        db_path.unlink()
+        console.print(f"[green]Database reset successfully: {db_path}[/green]")
+        console.print("[yellow]A new database will be created on next use.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Failed to delete database: {e}[/red]")
+        console.print(f"[yellow]Backup is still available at: {backup_path}[/yellow]")
+
+
+def handle_id_command(args):
+    """Handle ID-based shortcut commands like: dolist 1 done, dolist 2 remind today.
+
+    Args:
+        args: Command line arguments
+
+    Returns:
+        True if handled, False otherwise
+    """
+    if len(args) < 2:
+        return False
+
+    # Check if first arg is a number (task ID)
+    try:
+        task_id = int(args[1])
+    except ValueError:
+        return False
+
+    # If only ID provided, default to 'get'
+    if len(args) == 2:
+        init_db(None)
+        from .do import get
+        get(task_id, None)
+        return True
+
+    # Get the action
+    action = args[2].lower()
+
+    # Initialize database
+    init_db(None)
+
+    # Handle different actions
+    if action == 'remind':
+        # dolist 1 remind 2 hours
+        if len(args) < 4:
+            console.print("[red]Error: remind requires a time argument[/red]")
+            console.print("Usage: dolist <id> remind <time>")
+            console.print("Example: dolist 1 remind 2 hours")
+            sys.exit(1)
+
+        reminder_text = ' '.join(args[3:])
+        task = tasks[task_id]
+
+        if not task:
+            console.print(f"[red]Task {task_id} not found[/red]")
+            sys.exit(1)
+
+        # Parse reminder
+        parsed_dt, error = parse_reminder(reminder_text)
+        if error:
+            console.print(f"[red]Error parsing reminder: {error}[/red]")
+            sys.exit(1)
+
+        # Update task
+        task.update_record(reminder=reminder_text, reminder_timestamp=parsed_dt)
+        db.commit()
+
+        console.print(f"[green]✓ Reminder set for task {task_id}[/green]")
+        console.print(f"[cyan]  {task.name}[/cyan]")
+        console.print(f"[yellow]  Due: {format_reminder(parsed_dt)}[/yellow]")
+        return True
+
+    elif action in ['done', 'cancel', 'start', 'new', 'post', 'in-progress']:
+        # dolist 1 done
+        task = tasks[task_id]
+
+        if not task:
+            console.print(f"[red]Task {task_id} not found[/red]")
+            sys.exit(1)
+
+        # Map action to status
+        status_map = {
+            'done': 'done',
+            'cancel': 'cancel',
+            'cancelled': 'cancel',
+            'start': 'in-progress',
+            'in-progress': 'in-progress',
+            'new': 'new',
+            'post': 'post',
+            'postpone': 'post',
+            'postponed': 'post',
+        }
+
+        new_status = status_map.get(action)
+        if not new_status:
+            console.print(f"[red]Unknown action: {action}[/red]")
+            return False
+
+        task.update_record(status=new_status)
+        db.commit()
+
+        console.print(f"[green]✓ Task {task_id} marked as {new_status}[/green]")
+        console.print(f"[cyan]  {task.name}[/cyan]")
+        return True
+
+    elif action == 'clear-reminder':
+        # dolist 1 clear-reminder
+        task = tasks[task_id]
+
+        if not task:
+            console.print(f"[red]Task {task_id} not found[/red]")
+            sys.exit(1)
+
+        task.update_record(reminder=None, reminder_timestamp=None)
+        db.commit()
+
+        console.print(f"[green]✓ Reminder cleared from task {task_id}[/green]")
+        console.print(f"[cyan]  {task.name}[/cyan]")
+        return True
+
+    elif action == 'delete' or action == 'rm':
+        # dolist 1 delete
+        task = tasks[task_id]
+
+        if not task:
+            console.print(f"[red]Task {task_id} not found[/red]")
+            sys.exit(1)
+
+        task.update_record(deleted=True)
+        db.commit()
+
+        console.print(f"[green]✓ Task {task_id} deleted[/green]")
+        console.print(f"[cyan]  {task.name}[/cyan]")
+        return True
+
+    elif action == 'delay':
+        # dolist 1 delay [time]
+        task = tasks[task_id]
+
+        if not task:
+            console.print(f"[red]Task {task_id} not found[/red]")
+            sys.exit(1)
+
+        # Check if task has a reminder
+        if not task.reminder_timestamp:
+            console.print(f"[yellow]Task {task_id} has no active reminder[/yellow]")
+            console.print("[yellow]Set a reminder first using: dolist {task_id} remind <time>[/yellow]")
+            sys.exit(1)
+
+        # Default delay is 10 minutes if not specified
+        if len(args) < 4:
+            delay_text = "10 minutes"
+        else:
+            delay_text = ' '.join(args[3:])
+
+        # Parse the delay time
+        parsed_dt, error = parse_reminder(delay_text)
+        if error:
+            console.print(f"[red]Error parsing delay time: {error}[/red]")
+            sys.exit(1)
+
+        # Update the reminder timestamp
+        task.update_record(reminder=f"delayed: {delay_text}", reminder_timestamp=parsed_dt)
+        db.commit()
+
+        console.print(f"[green]✓ Reminder delayed for task {task_id}[/green]")
+        console.print(f"[cyan]  {task.name}[/cyan]")
+        console.print(f"[yellow]  New due time: {format_reminder(parsed_dt)}[/yellow]")
+        return True
+
+    elif action == 'show':
+        # dolist 1 show
+        from .do import show
+        show(task_id, None)
+        return True
+
+    else:
+        console.print(f"[red]Unknown action: {action}[/red]")
+        console.print("\n[yellow]Available actions:[/yellow]")
+        console.print("  remind <time>     - Set a reminder")
+        console.print("  delay [time]      - Delay reminder (default: 10 minutes)")
+        console.print("  done              - Mark as done")
+        console.print("  cancel            - Mark as cancelled")
+        console.print("  start             - Mark as in-progress")
+        console.print("  new               - Mark as new")
+        console.print("  post              - Mark as postponed")
+        console.print("  clear-reminder    - Clear reminder")
+        console.print("  delete, rm        - Delete task")
+        console.print("  show              - Show task details")
+        console.print("  (no action)       - Interactive edit")
+        return False
+
+    return False
+
+
 def main_entry():
     """Entry point for console script."""
+    import sys
+
+    # Check if this is an ID-based command
+    if handle_id_command(sys.argv):
+        return
+
+    # Otherwise, use normal command parsing
     app()
 
 

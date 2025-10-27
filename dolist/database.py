@@ -159,7 +159,7 @@ class Table:
                 except (json.JSONDecodeError, TypeError):
                     data[col_name] = []
             # Handle datetime fields
-            elif col_name == 'created_on' and value:
+            elif col_name in ('created_on', 'reminder_timestamp') and value:
                 try:
                     data[col_name] = datetime.fromisoformat(value)
                 except (ValueError, TypeError):
@@ -199,6 +199,14 @@ class Field:
         """Build less than condition."""
         return Condition(self, '<', value)
 
+    def __le__(self, value):
+        """Build less than or equal condition."""
+        return Condition(self, '<=', value)
+
+    def __ge__(self, value):
+        """Build greater than or equal condition."""
+        return Condition(self, '>=', value)
+
     def belongs(self, values):
         """Build IN condition."""
         return Condition(self, 'IN', values)
@@ -230,6 +238,13 @@ class Condition:
 
     def to_sql(self):
         """Convert to SQL WHERE clause and parameters."""
+        # Handle NULL comparisons
+        if self.value is None:
+            if self.operator == '=':
+                return f"{self.field.name} IS NULL", []
+            elif self.operator == '!=' or self.operator == '<>':
+                return f"{self.field.name} IS NOT NULL", []
+
         if self.operator == 'IN':
             placeholders = ', '.join('?' * len(self.value))
             return f"{self.field.name} IN ({placeholders})", list(self.value)
@@ -254,6 +269,9 @@ class Condition:
             value = self.value
             if isinstance(value, bool):
                 value = 1 if value else 0
+            # Convert datetime to ISO format string for SQLite
+            elif isinstance(value, datetime):
+                value = value.isoformat()
 
             return f"{self.field.name} {self.operator} ?", [value]
 

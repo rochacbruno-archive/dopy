@@ -19,10 +19,15 @@ from textual.widgets import (
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from rich.text import Text
+from .reminder_parser import parse_reminder, format_reminder, get_time_until
 
 
 class AddTaskScreen(ModalScreen):
     """Modal screen for adding a new task."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Return to home"),
+    ]
 
     CSS = """
     AddTaskScreen {
@@ -62,6 +67,10 @@ class AddTaskScreen(ModalScreen):
         self.db = db
         self._tasks_table = tasks_table
 
+    def action_dismiss(self) -> None:
+        """Return to home screen."""
+        self.app.pop_screen()
+
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label("Add New Task")
@@ -70,10 +79,10 @@ class AddTaskScreen(ModalScreen):
             yield Select(
                 [
                     ("New", "new"),
-                    ("Working", "working"),
+                    ("In Progress", "in-progress"),
                     ("Done", "done"),
-                    ("Cancel", "cancel"),
-                    ("Post", "post"),
+                    ("Cancelled", "cancel"),
+                    ("Postponed", "post"),
                 ],
                 value="new",
                 id="status_select",
@@ -100,6 +109,13 @@ class AddTaskScreen(ModalScreen):
             status = status_select.value or "new"
             reminder = reminder_input.value.strip() or None
 
+            # Parse reminder
+            reminder_timestamp = None
+            if reminder:
+                parsed_dt, error = parse_reminder(reminder)
+                if not error:
+                    reminder_timestamp = parsed_dt
+
             # Insert task
             created_on = datetime.now()
             self._tasks_table.insert(
@@ -107,6 +123,7 @@ class AddTaskScreen(ModalScreen):
                 tag=tag,
                 status=status,
                 reminder=reminder,
+                reminder_timestamp=reminder_timestamp,
                 created_on=created_on,
             )
             self.db.commit()
@@ -119,6 +136,10 @@ class AddTaskScreen(ModalScreen):
 
 class EditTaskScreen(ModalScreen):
     """Modal screen for editing a task."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Return to home"),
+    ]
 
     CSS = """
     EditTaskScreen {
@@ -164,6 +185,10 @@ class EditTaskScreen(ModalScreen):
         self._tasks_table = tasks_table
         self.task_row = task_row
 
+    def action_dismiss(self) -> None:
+        """Return to home screen."""
+        self.app.pop_screen()
+
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label(f"Edit Task #{self.task_row.id}")
@@ -172,10 +197,10 @@ class EditTaskScreen(ModalScreen):
             yield Select(
                 [
                     ("New", "new"),
-                    ("Working", "working"),
+                    ("In Progress", "in-progress"),
                     ("Done", "done"),
-                    ("Cancel", "cancel"),
-                    ("Post", "post"),
+                    ("Cancelled", "cancel"),
+                    ("Postponed", "post"),
                 ],
                 value=self.task_row.status,
                 id="status_select",
@@ -189,12 +214,43 @@ class EditTaskScreen(ModalScreen):
             yield TextArea(notes_text, id="notes_textarea")
             with Horizontal():
                 yield Button("Save", variant="primary", id="save_btn")
+                yield Button("Delay 10min", variant="warning", id="delay_reminder_btn")
+                yield Button("Clear Reminder", variant="warning", id="clear_reminder_btn")
                 yield Button("Delete", variant="error", id="delete_btn")
                 yield Button("Cancel", variant="default", id="cancel_btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel_btn":
             self.app.pop_screen()
+        elif event.button.id == "delay_reminder_btn":
+            # Delay reminder by 10 minutes
+            if not self.task_row.reminder_timestamp:
+                self.app.notify("No active reminder to delay", severity="warning")
+                return
+
+            # Parse "10 minutes" to get new timestamp
+            parsed_dt, error = parse_reminder("10 minutes")
+            if error:
+                self.app.notify(f"Error: {error}", severity="error")
+                return
+
+            # Update the reminder timestamp
+            self.task_row.update_record(reminder="delayed: 10 minutes", reminder_timestamp=parsed_dt)
+            self.db.commit()
+
+            # Update the input field
+            reminder_input = self.query_one("#reminder_input", Input)
+            reminder_input.value = "delayed: 10 minutes"
+
+            self.app.notify(f"Reminder delayed by 10 minutes", severity="information")
+        elif event.button.id == "clear_reminder_btn":
+            # Clear reminder
+            self.task_row.update_record(reminder=None, reminder_timestamp=None)
+            self.db.commit()
+            # Update the input field
+            reminder_input = self.query_one("#reminder_input", Input)
+            reminder_input.value = ""
+            self.app.notify("Reminder cleared", severity="information")
         elif event.button.id == "delete_btn":
             self.task_row.update_record(deleted=True)
             self.db.commit()
@@ -218,12 +274,20 @@ class EditTaskScreen(ModalScreen):
             notes_text = notes_textarea.text
             notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
 
+            # Parse reminder
+            reminder_timestamp = None
+            if reminder:
+                parsed_dt, error = parse_reminder(reminder)
+                if not error:
+                    reminder_timestamp = parsed_dt
+
             # Update task
             self.task_row.update_record(
                 name=name,
                 tag=tag,
                 status=status,
                 reminder=reminder,
+                reminder_timestamp=reminder_timestamp,
                 notes=notes,
             )
             self.db.commit()
@@ -288,7 +352,6 @@ class DoListTUI(App):
 
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
-        Binding("escape", "quit", "Quit", priority=True),
         Binding("a", "add_task", "Add Task"),
         Binding("r", "refresh", "Refresh"),
         ("enter", "edit_task", "Edit"),
@@ -330,7 +393,7 @@ class DoListTUI(App):
                 yield Button("Add Task (a)", variant="primary", id="add_task_btn")
                 yield Button("Edit (Enter)", variant="default", id="edit_task_btn")
                 yield Button("Refresh (r)", variant="default", id="refresh_btn")
-                yield Button("Quit (Esc/Ctrl+Q)", variant="error", id="quit_btn")
+                yield Button("Quit (Ctrl+Q)", variant="error", id="quit_btn")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -422,24 +485,40 @@ class DoListTUI(App):
         # Note: Textual Select doesn't support dynamic options easily, skipping for now
 
         # Add rows to table
+        now = datetime.now()
         for row in rows:
             # Color status
             status_text = row.status
             if row.status == "done":
                 status_text = f"[green]{row.status}[/green]"
-            elif row.status == "working":
+            elif row.status == "in-progress":
                 status_text = f"[yellow]{row.status}[/yellow]"
             elif row.status == "cancel":
                 status_text = f"[red]{row.status}[/red]"
             elif row.status == "new":
                 status_text = f"[blue]{row.status}[/blue]"
+            elif row.status == "post":
+                status_text = f"[magenta]{row.status}[/magenta]"
+
+            # Format reminder display
+            reminder_display = ''
+            if row.reminder_timestamp:
+                # Check if reminder is in the past
+                if row.reminder_timestamp < now:
+                    # Auto-clear past reminders
+                    row.update_record(reminder=None, reminder_timestamp=None)
+                    self.db.commit()
+                    reminder_display = ''
+                else:
+                    # Show time until reminder
+                    reminder_display = get_time_until(row.reminder_timestamp)
 
             table.add_row(
                 str(row.id),
                 row.name,
                 row.tag,
                 status_text,
-                row.reminder or "",
+                reminder_display,
                 str(len(row.notes) if row.notes else 0),
                 row.created_on.strftime("%d/%m-%H:%M"),
                 key=str(row.id),

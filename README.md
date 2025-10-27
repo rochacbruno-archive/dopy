@@ -28,7 +28,9 @@ optionally use your Dropbox to store the database
 - 🗄️ **SQLite Database** for local task storage
 - 🏷️ **Tag Support** to organize tasks
 - 📝 **Notes** on tasks
-- ⏰ **Reminders** for tasks
+- ⏰ **Smart Reminders** with flexible natural language parsing and background service
+- 🔔 **Desktop Notifications** for due reminders (with custom handler support)
+- 🔧 **Systemd Integration** for automatic reminder service
 - 💾 **Multiple Databases** support
 
 ## Requirements
@@ -110,7 +112,53 @@ dolist --help
     |____/ \___/|_|_|___/\__|
 ```
 
+### ⚡ Quick Reference
+
+**Most common operations:**
+```bash
+dolist                      # Launch TUI
+dolist add "Task name"      # Add task
+dolist ls                   # List active tasks
+dolist 1 done               # Mark task 1 as done
+dolist 2 remind tomorrow    # Set reminder on task 2
+dolist 3 start              # Start working on task 3
+dolist 4                    # Edit task 4 interactively
+```
+
 ### Command Reference
+
+#### ID Shortcut Syntax
+
+DoList supports a convenient shortcut for working with tasks by ID:
+
+```bash
+dolist <id> [action] [args]
+```
+
+**Available actions:**
+- `remind <time>` - Set a reminder
+- `delay [time]` - Delay reminder (default: 10 minutes)
+- `done` - Mark as done
+- `cancel` - Mark as cancelled
+- `start` - Mark as in-progress
+- `new` - Reset to new
+- `post` - Mark as postponed
+- `show` - Show task details
+- `clear-reminder` - Clear reminder
+- `delete`, `rm` - Delete task
+- _(no action)_ - Interactive edit
+
+**Examples:**
+```bash
+dolist 1                   # Edit task 1 interactively
+dolist 2 done              # Mark task 2 as done
+dolist 3 remind tomorrow   # Set reminder on task 3
+dolist 3 delay 1 hour      # Delay reminder by 1 hour
+dolist 4 start             # Start working on task 4
+dolist 5 show              # Show details of task 5
+```
+
+#### Classic Command Syntax
 
 ```bash
 Usage: dolist COMMAND [ARGS]
@@ -118,20 +166,24 @@ Usage: dolist COMMAND [ARGS]
 DoList - To-Do list on Command Line Interface
 
 Commands:
-  add        Add a new task.
-  cancel     Mark a task as cancelled.
-  done       Mark a task as done.
-  get        Interactive shell for a specific task.
-  ls         List tasks.
-  note       Add or manage notes for a task.
-  post       Mark a task as posted.
-  rm         Remove (soft delete) a task.
-  shell      Start interactive Python REPL.
-  show       Show a task with all its notes.
-  start      Mark a task as new (reset to initial state).
-  working    Mark a task as working (in progress).
-  --help -h  Display this message and exit.
-  --version  Display application version.
+  add             Add a new task.
+  cancel          Mark a task as cancelled.
+  clear-reminder  Clear the reminder from a task.
+  done            Mark a task as done.
+  get             Interactive shell for a specific task.
+  in-progress     Mark a task as in-progress (alias for start).
+  ls              List tasks.
+  new             Mark a task as new (reset to initial state).
+  note            Add or manage notes for a task.
+  post            Mark a task as postponed/delayed.
+  reset           Reset the database (WARNING: deletes all tasks after creating a backup).
+  rm              Remove (soft delete) a task.
+  service         Run or manage the reminder service.
+  shell           Start interactive Python REPL.
+  show            Show a task with all its notes.
+  start           Mark a task as in-progress (start working on it).
+  --help -h       Display this message and exit.
+  --version       Display application version.
 
 Parameters:
   USE --use  Database name to use (optional).
@@ -166,7 +218,8 @@ Features of TUI mode:
   - `a` - Add new task
   - `Enter` - Edit selected task
   - `r` - Refresh task list
-  - `Esc` or `Ctrl+Q` - Quit
+  - `Ctrl+Q` - Quit
+  - `Esc` - Return to home (when in modal screens)
 
 #### 2. Interactive Python REPL (Enhanced with ptpython)
 
@@ -256,28 +309,46 @@ List all tasks (including done/cancelled):
 dolist ls --all
 ```
 
-#### 5. Change Task Status
+#### 5. Quick Task Actions with ID Shortcuts
 
-DoList provides dedicated commands for each status change:
+DoList provides an intuitive shortcut syntax: `dolist <id> <action> [args]`
 
 ```bash
-# Mark task as working (in progress)
-dolist working 2
+# Change status quickly
+dolist 1 done              # Mark task 1 as done
+dolist 2 start             # Mark task 2 as in-progress
+dolist 3 cancel            # Mark task 3 as cancelled
+dolist 4 post              # Mark task 4 as postponed
+dolist 5 new               # Reset task 5 to new
 
-# Mark task as done
-dolist done 2
+# Set reminders on existing tasks
+dolist 1 remind tomorrow   # Set reminder for tomorrow
+dolist 2 remind 2 hours    # Set reminder for 2 hours from now
+dolist 3 remind next week  # Set reminder for next week
 
-# Mark task as cancelled
-dolist cancel 2
+# Delay reminders
+dolist 1 delay             # Delay reminder by 10 minutes (default)
+dolist 2 delay 1 hour      # Delay reminder by 1 hour
+dolist 3 delay 30 mins     # Delay reminder by 30 minutes
 
-# Mark task as posted
-dolist post 2
-
-# Reset task to new status
-dolist start 2
+# Other quick actions
+dolist 1 show              # Show task details
+dolist 2 clear-reminder    # Clear reminder
+dolist 3 delete            # Delete task
+dolist 4                   # Interactive edit (same as 'dolist get 4')
 ```
 
-Available statuses: `new`, `working`, `done`, `cancel`, `post`
+**Classic command syntax** (still supported):
+```bash
+dolist start 2
+dolist in-progress 2
+dolist done 2
+dolist cancel 2
+dolist post 2
+dolist new 2
+```
+
+Available statuses: `new`, `in-progress`, `done`, `cancel`, `post`
 
 #### 6. Remove a Task
 
@@ -285,7 +356,172 @@ Available statuses: `new`, `working`, `done`, `cancel`, `post`
 dolist rm 2
 ```
 
-#### 7. Edit a Task in Interactive Shell
+#### 7. Reset Database (with Backup)
+
+DoList provides a safe way to reset your database with automatic timestamped backup:
+
+```bash
+# Reset database with confirmation prompt
+dolist reset
+
+# Reset database without confirmation (use with caution)
+dolist reset --yes
+
+# Reset a specific database
+dolist reset --use mydb
+```
+
+This command will:
+1. Ask for confirmation (unless `--yes` flag is used)
+2. Create a timestamped backup (e.g., `tasks.db.backup_20231215_143022`)
+3. Delete the database file
+4. A new empty database will be created on next use
+
+The backup file is stored in the same directory as your database (`~/.config/dolist/` by default).
+
+#### 8. Smart Reminders
+
+DoList provides a powerful reminder system with natural language parsing and a background service for notifications.
+
+##### Setting Reminders
+
+Use flexible, human-friendly syntax when adding or editing tasks:
+
+```bash
+# Special keywords
+dolist add "Call dentist" --reminder today      # Today at 3:00 PM
+dolist add "Team meeting" --reminder tomorrow   # Tomorrow at 9:00 AM
+
+# Relative time with "next"
+dolist add "Review PR" --reminder "next hour"
+dolist add "Update docs" --reminder "next day"
+dolist add "Sprint planning" --reminder "next week"
+dolist add "Quarterly review" --reminder "next quarter"
+
+# Specific durations (supports singular, plural, and abbreviations)
+dolist add "Check email" --reminder "30 minutes"
+dolist add "Lunch break" --reminder "2 hours"
+dolist add "Follow up" --reminder "3 days"
+dolist add "Project deadline" --reminder "2 weeks"
+dolist add "Renewal" --reminder "6 months"
+
+# Abbreviations work too!
+dolist add "Quick task" --reminder "10 mins"    # 10 minutes
+dolist add "Short break" --reminder "2 hrs"     # 2 hours
+dolist add "Follow-up" --reminder "5 d"         # 5 days
+```
+
+**Supported time units:**
+- Seconds: `sec`, `secs`, `s`, `second`, `seconds`
+- Minutes: `min`, `mins`, `m`, `minute`, `minutes`
+- Hours: `hr`, `hrs`, `h`, `ho`, `hour`, `hours`
+- Days: `d`, `day`, `days`
+- Weeks: `w`, `wk`, `wks`, `week`, `weeks`
+- Months: `mo`, `mon`, `mos`, `month`, `months`
+- Quarters: `q`, `qtr`, `quarter`, `quarters` (3 months each)
+- Years: `y`, `yr`, `yrs`, `year`, `years`
+- Decades: `decade`, `decades`
+
+##### Delaying Reminders
+
+Need more time? Delay any reminder easily:
+
+```bash
+# Delay by default 10 minutes
+dolist 1 delay
+
+# Delay by custom amount
+dolist 2 delay 1 hour
+dolist 3 delay 30 minutes
+dolist 4 delay tomorrow
+```
+
+In the TUI, use the "Delay 10min" button in the edit dialog.
+
+##### Clearing Reminders
+
+```bash
+# Clear reminder from a specific task
+dolist clear-reminder 5
+```
+
+In the TUI, use the "Clear Reminder" button in the edit dialog.
+
+**Smart Display:**
+- When listing tasks, reminders show as "in 2 hours", "in 30 minutes", etc.
+- Past reminders are automatically cleared when viewing task lists
+- Done/cancelled tasks will not trigger reminder notifications
+
+##### Running the Reminder Service
+
+The reminder service monitors your tasks and sends notifications when they're due:
+
+```bash
+# Run service manually (foreground)
+dolist service
+
+# Install as systemd service (runs automatically)
+dolist service --enable
+
+# Check service status
+systemctl --user status dolist-reminder.service
+
+# Stop the service
+systemctl --user stop dolist-reminder.service
+```
+
+**What happens when a reminder is due?**
+
+By default, DoList uses `notify-send` to display desktop notifications with:
+- Task name as the title
+- Tag, status, and note count in the body
+- 10-second display duration
+- Service checks every **30 seconds** for due reminders
+- Done/cancelled tasks are excluded from reminder notifications
+
+##### Custom Reminder Handlers
+
+You can create custom handlers for reminders by setting `reminder_cmd` in your config file (`~/.config/dolist/config.toml`):
+
+```toml
+[reminders]
+reminder_cmd = "/path/to/custom/handler"
+```
+
+Your custom handler will receive task data as JSON via stdin:
+
+```json
+{
+  "id": 1,
+  "name": "Task name",
+  "tag": "work",
+  "status": "in-progress",
+  "reminder": "2 hours",
+  "notes": ["Note 1", "Note 2"],
+  "created_on": "2024-01-15T10:30:00"
+}
+```
+
+Example custom handler (Python):
+
+```python
+#!/usr/bin/env python
+import json
+import sys
+import subprocess
+
+# Read task data
+task = json.load(sys.stdin)
+
+# Send to Slack, email, or your preferred notification system
+subprocess.run([
+    'curl', '-X', 'POST', 'YOUR_WEBHOOK_URL',
+    '-H', 'Content-Type: application/json',
+    '-d', json.dumps({'text': f"Reminder: {task['name']}"})
+])
+```
+
+#### 9. Edit a Task in Interactive Shell
 
 ```bash
 dolist get 3
@@ -475,7 +711,7 @@ This project has been modernized with:
 ### Task Model
 
 The `Task` model is now powered by Pydantic with:
-- Field validation (status must be one of: new, working, done, cancel, post)
+- Field validation (status must be one of: new, in-progress, done, cancel, post)
 - Type hints for all fields
 - Automatic serialization/deserialization
 - Methods for database updates: `update_name()`, `update_status()`, `add_note()`, etc.
@@ -514,9 +750,12 @@ This project is open source. See the repository for license details.
 - [x] Implement Pydantic models ✅
 - [x] Lightweight SQLite database wrapper ✅
 - [x] Comprehensive test suite (105 tests) ✅
+- [x] Smart reminders with natural language parsing ✅
+- [x] Background reminder service with systemd support ✅
+- [x] Desktop notifications for reminders ✅
 - [ ] Add export functionality (JSON, CSV, HTML)
 - [ ] Implement task priorities
-- [ ] Add due dates and recurring tasks
+- [ ] Add recurring tasks
 - [ ] Cloud sync support (Dropbox, Google Drive)
 - [ ] Integration with external services (Todoist, Google Tasks)
 - [ ] Advanced filtering and sorting options

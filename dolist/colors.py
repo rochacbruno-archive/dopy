@@ -22,7 +22,7 @@ def STATUS(s):
         return colored(s, 'white', 'on_magenta', attrs=['bold'])
     elif s == 'post':
         return colored(s, 'grey', 'on_white', attrs=['bold'])
-    elif s == 'working':
+    elif s == 'in-progress':
         return colored(s, 'white', 'on_yellow', attrs=['bold'])
     else:
         return colored(s, 'white', 'on_cyan', attrs=['bold'])
