@@ -107,11 +107,12 @@ elif CONFIGFILE.exists():
             'dbdir': toml_config.get('database', {}).get('dir', str(BASEDIR)),
             'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db'),
             'theme': toml_config.get('ui', {}).get('theme', 'textual-dark'),
+            'autorefresh_interval': toml_config.get('tui', {}).get('autorefresh_interval', 30),
             'reminder_cmd': toml_config.get('reminders', {}).get('reminder_cmd')
         }
     except Exception as e:
         print(f"Warning: Could not load config file: {e}")
-        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
+        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark', 'autorefresh_interval': 30}
 else:
     # Create default TOML config
     default_config = f'''# DoList Configuration File
@@ -128,6 +129,11 @@ uri = "sqlite://tasks.db"
 # Available themes: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, monokai, solarized-light, solarized-dark
 theme = "textual-dark"
 
+[tui]
+# Auto-refresh interval in seconds (default: 30)
+# Set to 0 to disable auto-refresh
+autorefresh_interval = 30
+
 [reminders]
 # Custom command to handle reminders (optional)
 # If set, this command will be called with task JSON piped to stdin
@@ -135,7 +141,7 @@ theme = "textual-dark"
 # reminder_cmd = "/path/to/custom/reminder/handler"
 '''
     CONFIGFILE.write_text(default_config)
-    CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
+    CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark', 'autorefresh_interval': 30}
 
 # Support legacy database location (~/.dopy/dopy.db)
 legacy_db_path = Path.home() / '.dopy' / 'dopy.db'
@@ -393,6 +399,64 @@ def ls(
         query &= tasks.name.like('%%%s%%' % search.lower())
 
     rows = db(query).select()
+
+    # Apply date filters (post-query filtering)
+    if date or month or day or year:
+        filtered_rows = []
+        for row in rows:
+            if not row.created_on:
+                continue
+
+            include_row = True
+
+            # Check specific date
+            if date and include_row:
+                try:
+                    filter_date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+                    if row.created_on.date() != filter_date:
+                        include_row = False
+                except ValueError:
+                    console.print(f"[red]Invalid date format. Use YYYY-MM-DD[/red]")
+                    return
+
+            # Check month
+            if month and include_row:
+                try:
+                    month_num = int(month)
+                    if not 1 <= month_num <= 12:
+                        raise ValueError
+                    if row.created_on.month != month_num:
+                        include_row = False
+                except ValueError:
+                    console.print(f"[red]Invalid month. Use 1-12[/red]")
+                    return
+
+            # Check day
+            if day and include_row:
+                try:
+                    day_num = int(day)
+                    if not 1 <= day_num <= 31:
+                        raise ValueError
+                    if row.created_on.day != day_num:
+                        include_row = False
+                except ValueError:
+                    console.print(f"[red]Invalid day. Use 1-31[/red]")
+                    return
+
+            # Check year
+            if year and include_row:
+                try:
+                    year_num = int(year)
+                    if row.created_on.year != year_num:
+                        include_row = False
+                except ValueError:
+                    console.print(f"[red]Invalid year[/red]")
+                    return
+
+            if include_row:
+                filtered_rows.append(row)
+
+        rows = filtered_rows
 
     headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Notes','Created']]
     table = [headers]
