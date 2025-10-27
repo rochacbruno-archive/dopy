@@ -18,8 +18,42 @@ from textual.widgets import (
 )
 from textual.binding import Binding
 from textual.screen import ModalScreen
+from textual.command import Command, CommandPalette, Provider
 from rich.text import Text
 from .reminder_parser import parse_reminder, format_reminder, get_time_until
+from functools import reduce
+
+
+def parse_search(search_text: str) -> dict:
+    """Parse search syntax into filter dict.
+
+    Examples:
+        /test → {'text': 'test'}
+        /tag=work → {'tag': ['work']}
+        /tag=work,personal → {'tag': ['work', 'personal']}
+        /status=new,done → {'status': ['new', 'done']}
+        /tag=work test → {'tag': ['work'], 'text': 'test'}
+        /status=new tag=urgent bug → {'status': ['new'], 'tag': ['urgent'], 'text': 'bug'}
+    """
+    filters = {}
+    remaining_text = []
+
+    parts = search_text.strip().split()
+
+    for part in parts:
+        if '=' in part:
+            key, value = part.split('=', 1)
+            if key == 'tag':
+                filters['tag'] = value.split(',')
+            elif key == 'status':
+                filters['status'] = value.split(',')
+        else:
+            remaining_text.append(part)
+
+    if remaining_text:
+        filters['text'] = ' '.join(remaining_text)
+
+    return filters
 
 
 class ConfirmDeleteScreen(ModalScreen):
@@ -75,6 +109,81 @@ class ConfirmDeleteScreen(ModalScreen):
             self.app.pop_screen()
         elif event.button.id == "cancel_delete_btn":
             self.app.pop_screen()
+
+
+class SearchOverlay(ModalScreen):
+    """Vim-like search overlay at the bottom of screen."""
+
+    BINDINGS = [
+        ("escape", "cancel_search", "Cancel search"),
+        ("enter", "apply_search", "Apply search"),
+    ]
+
+    CSS = """
+    SearchOverlay {
+        align: center bottom;
+        background: transparent;
+    }
+
+    #search_container {
+        width: 100%;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+
+    #search_container Label {
+        width: auto;
+        margin: 0 1 0 0;
+    }
+
+    #search_container Input {
+        width: 1fr;
+    }
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.search_text = ""
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(id="search_container"):
+            yield Label("/")
+            yield Input(placeholder="Search: text, tag=value, status=value", id="search_input")
+
+    def on_mount(self) -> None:
+        """Focus the input when overlay appears."""
+        search_input = self.query_one("#search_input", Input)
+        search_input.focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Live filtering as user types."""
+        if event.input.id == "search_input":
+            self.search_text = event.value
+            # Apply live filtering
+            if hasattr(self.app, "apply_search_filter"):
+                filters = parse_search(self.search_text)
+                self.app.apply_search_filter(filters, live=True)
+
+    def action_cancel_search(self) -> None:
+        """ESC: Close overlay and clear search."""
+        if hasattr(self.app, "clear_search_filter"):
+            self.app.clear_search_filter()
+        self.app.pop_screen()
+        # Task 9: Restore focus to table
+        if hasattr(self.app, "_restore_table_focus"):
+            self.app._restore_table_focus()
+
+    def action_apply_search(self) -> None:
+        """Enter: Close overlay and keep search active."""
+        if hasattr(self.app, "apply_search_filter"):
+            filters = parse_search(self.search_text)
+            self.app.apply_search_filter(filters, live=False)
+        self.app.pop_screen()
+        # Task 9: Restore focus to table
+        if hasattr(self.app, "_restore_table_focus"):
+            self.app._restore_table_focus()
 
 
 class AddTaskScreen(ModalScreen):
@@ -341,8 +450,46 @@ class EditTaskScreen(ModalScreen):
                 self.app.refresh_tasks()
 
 
+class DoListCommandProvider(Provider):
+    """Custom command provider for DoList TUI (Task 4)."""
+
+    async def search(self, query: str):
+        """Search for commands matching the query."""
+        matcher = self.matcher(query)
+
+        # Define available commands
+        commands = [
+            ("Sort by Name (A-Z)", "sort-name-asc", "Sort tasks by name in ascending order"),
+            ("Sort by Name (Z-A)", "sort-name-desc", "Sort tasks by name in descending order"),
+            ("Sort by Created (Oldest)", "sort-created-asc", "Sort tasks by creation date (oldest first)"),
+            ("Sort by Created (Newest)", "sort-created-desc", "Sort tasks by creation date (newest first)"),
+            ("Sort by Status (A-Z)", "sort-status-asc", "Sort tasks by status in ascending order"),
+            ("Sort by Status (Z-A)", "sort-status-desc", "Sort tasks by status in descending order"),
+            ("Sort by Tag (A-Z)", "sort-tag-asc", "Sort tasks by tag in ascending order"),
+            ("Sort by Tag (Z-A)", "sort-tag-desc", "Sort tasks by tag in descending order"),
+            ("Sort by ID (Low-High)", "sort-id-asc", "Sort tasks by ID in ascending order"),
+            ("Sort by ID (High-Low)", "sort-id-desc", "Sort tasks by ID in descending order"),
+            ("Refresh", "refresh", "Manually refresh the task list"),
+            ("Quit", "quit", "Exit the TUI"),
+        ]
+
+        for label, command_name, help_text in commands:
+            match = matcher.match(label)
+            if match > 0:
+                yield Command(
+                    prompt=label,
+                    title=label,
+                    help=help_text,
+                    callback=lambda cmd=command_name: self.app.run_command(cmd),
+                    match=match
+                )
+
+
 class DoListTUI(App):
     """A Textual TUI for DoList task management."""
+
+    # Task 4: Register command provider
+    COMMAND_PROVIDERS = [DoListCommandProvider]
 
     CSS = """
     Screen {
@@ -392,6 +539,8 @@ class DoListTUI(App):
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("a", "add_task", "Add Task"),
         Binding("r", "refresh", "Refresh"),
+        Binding("/", "open_search", "Search"),
+        Binding(":", "command_palette", "Commands"),
         ("enter", "edit_task", "Edit"),
     ]
 
@@ -406,6 +555,20 @@ class DoListTUI(App):
 
         # Task 2: State for status filters
         self.active_status_filters = set()  # Empty = show all active (not done/cancel)
+
+        # Task 3: State for search filters
+        self.search_filter = {}  # Dict with 'tag', 'status', 'text' keys
+
+        # Task 7: State for sorting and scroll preservation
+        self.sort_column = None  # e.g., 'name', 'created', 'status'
+        self.sort_direction = 'asc'  # 'asc' or 'desc'
+        self.last_scroll_y = 0
+        self.last_selected_task_id = None
+
+        # Task 6: State for auto-refresh
+        self.autorefresh_enabled = False
+        self.autorefresh_timer = None
+        self.autorefresh_interval = config.get('autorefresh_interval', 30) if config else 30
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -426,7 +589,10 @@ class DoListTUI(App):
             with Horizontal(id="button_container"):
                 yield Button("Add Task (a)", variant="primary", classes="tight", id="add_task_btn")
                 yield Button("Edit (Enter)", variant="default", classes="tight", id="edit_task_btn")
+                yield Button("Search (/)", variant="default", classes="tight", id="search_btn")
+                yield Button("Commands (:)", variant="default", classes="tight", id="commands_btn")
                 yield Button("Refresh (r)", variant="default", classes="tight", id="refresh_btn")
+                yield Button("Auto-Refresh", variant="default", classes="tight", id="autorefresh_btn")
                 yield Button("Quit (Ctrl+Q)", variant="error", classes="tight", id="quit_btn")
         yield Footer()
 
@@ -437,6 +603,7 @@ class DoListTUI(App):
         self.theme = theme
 
         table = self.query_one("#tasks_table", DataTable)
+        # Task 5: Add columns (they are clickable by default in Textual)
         table.add_columns("ID", "Name", "Tag", "Status", "Reminder", "Notes", "Created")
         self.refresh_tasks()
 
@@ -512,21 +679,76 @@ class DoListTUI(App):
                     self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
                 break
 
+    def apply_sort(self, rows):
+        """Apply current sort to rows (Task 7).
+
+        Args:
+            rows: List of database rows to sort
+
+        Returns:
+            Sorted list of rows
+        """
+        if not self.sort_column:
+            return list(rows)
+
+        reverse = self.sort_direction == 'desc'
+        rows_list = list(rows)
+
+        if self.sort_column == 'name':
+            return sorted(rows_list, key=lambda r: r.name.lower(), reverse=reverse)
+        elif self.sort_column == 'created':
+            return sorted(rows_list, key=lambda r: r.created_on, reverse=reverse)
+        elif self.sort_column == 'status':
+            return sorted(rows_list, key=lambda r: r.status, reverse=reverse)
+        elif self.sort_column == 'tag':
+            return sorted(rows_list, key=lambda r: r.tag.lower(), reverse=reverse)
+        elif self.sort_column == 'id':
+            return sorted(rows_list, key=lambda r: r.id, reverse=reverse)
+
+        return rows_list
+
     def refresh_tasks(self) -> None:
-        """Refresh the task list."""
+        """Refresh the task list with state preservation (Task 7)."""
         table = self.query_one("#tasks_table", DataTable)
+
+        # Task 7: Store current state before refresh
+        current_cursor_row = table.cursor_row
+        if current_cursor_row is not None and current_cursor_row < len(table.rows):
+            try:
+                row_data = table.get_row_at(current_cursor_row)
+                if row_data:
+                    self.last_selected_task_id = int(row_data[0])
+            except:
+                self.last_selected_task_id = None
+
+        # Clear table
         table.clear()
 
         # Build query
         query = self._tasks_table.deleted != True
 
-        # Task 2: Apply status filters
-        if self.active_status_filters:
-            # If specific statuses are selected, show only those
+        # Task 3: Apply search filters first (they can override status filters)
+        if 'status' in self.search_filter and self.search_filter['status']:
+            # Search filter specifies statuses - use those
+            query &= self._tasks_table.status.belongs(self.search_filter['status'])
+        elif self.active_status_filters:
+            # Task 2: If specific statuses are selected, show only those
             query &= self._tasks_table.status.belongs(list(self.active_status_filters))
         else:
             # Default: show active tasks (not done/cancel/post)
             query &= ~self._tasks_table.status.belongs(["done", "cancel", "post"])
+
+        # Task 3: Apply text search filter
+        if 'text' in self.search_filter and self.search_filter['text']:
+            query &= self._tasks_table.name.like(f"%{self.search_filter['text']}%")
+
+        # Task 3: Apply tag search filter (OR logic for multiple tags)
+        if 'tag' in self.search_filter and self.search_filter['tag']:
+            tag_conditions = [
+                self._tasks_table.tag == tag
+                for tag in self.search_filter['tag']
+            ]
+            query &= reduce(lambda a, b: a | b, tag_conditions)
 
         # Legacy filter support (will be removed later)
         if self.current_filter.get("tag"):
@@ -539,9 +761,17 @@ class DoListTUI(App):
         # Get rows
         rows = self.db(query).select()
 
+        # Task 7: Apply current sort
+        rows = self.apply_sort(rows)
+
         # Add rows to table
         now = datetime.now()
-        for row in rows:
+        new_selection_index = None
+        for idx, row in enumerate(rows):
+            # Task 7: Track where the previously selected task appears
+            if self.last_selected_task_id and row.id == self.last_selected_task_id:
+                new_selection_index = idx
+
             # Color status
             status_text = row.status
             if row.status == "done":
@@ -579,8 +809,19 @@ class DoListTUI(App):
                 key=str(row.id),
             )
 
+        # Task 7: Restore selection if the task is still visible
+        if new_selection_index is not None:
+            try:
+                table.move_cursor(row=new_selection_index)
+            except:
+                pass
+
     def action_quit(self) -> None:
-        """Quit the application."""
+        """Quit the application (Task 9: cleanup timers)."""
+        # Stop auto-refresh timer if running
+        if self.autorefresh_timer:
+            self.autorefresh_timer.stop()
+            self.autorefresh_timer = None
         self.exit()
 
     def action_add_task(self) -> None:
@@ -599,6 +840,113 @@ class DoListTUI(App):
     def action_refresh(self) -> None:
         """Refresh the task list."""
         self.refresh_tasks()
+
+    def action_toggle_autorefresh(self) -> None:
+        """Toggle auto-refresh on/off (Task 6)."""
+        if self.autorefresh_enabled:
+            # Disable auto-refresh
+            self.autorefresh_enabled = False
+            if self.autorefresh_timer:
+                self.autorefresh_timer.stop()
+                self.autorefresh_timer = None
+
+            # Update button variant
+            try:
+                btn = self.query_one("#autorefresh_btn", Button)
+                btn.variant = "default"
+            except:
+                pass
+        else:
+            # Enable auto-refresh
+            self.autorefresh_enabled = True
+            if self.autorefresh_interval > 0:
+                self.autorefresh_timer = self.set_interval(
+                    self.autorefresh_interval,
+                    self.refresh_tasks
+                )
+
+            # Update button variant
+            try:
+                btn = self.query_one("#autorefresh_btn", Button)
+                btn.variant = "success"
+            except:
+                pass
+
+    def action_open_search(self) -> None:
+        """Open the search overlay (Task 3)."""
+        self.push_screen(SearchOverlay())
+
+    def apply_search_filter(self, filters: dict, live: bool = False) -> None:
+        """Apply search filter and refresh tasks.
+
+        Args:
+            filters: Dict with 'tag', 'status', 'text' keys
+            live: If True, this is live filtering (don't update status buttons)
+        """
+        self.search_filter = filters
+
+        # Task 3: If search includes status filter, update status toggle buttons
+        if not live and 'status' in filters and filters['status']:
+            # Update active_status_filters to match search
+            self.active_status_filters = set(filters['status'])
+
+            # Update button variants
+            for status in ["new", "in-progress", "done", "cancel", "post"]:
+                btn_id = f"status_{status}"
+                try:
+                    btn = self.query_one(f"#{btn_id}", Button)
+                    if status in self.active_status_filters:
+                        btn.variant = "primary"
+                    else:
+                        btn.variant = "default"
+                except:
+                    pass
+
+            # Update "All" button
+            try:
+                all_btn = self.query_one("#status_all", Button)
+                all_btn.variant = "default"
+            except:
+                pass
+
+        self.refresh_tasks()
+
+    def clear_search_filter(self) -> None:
+        """Clear search filter and refresh tasks."""
+        self.search_filter = {}
+        self.refresh_tasks()
+
+    def run_command(self, command: str) -> None:
+        """Execute a custom command (Task 4).
+
+        Args:
+            command: The command name to execute
+        """
+        if command == "refresh":
+            self.action_refresh()
+        elif command == "quit":
+            self.action_quit()
+        elif command.startswith("sort-"):
+            # Parse sort command: sort-{column}-{direction}
+            parts = command.split("-")
+            if len(parts) == 3:
+                _, column, direction = parts
+                self.sort_column = column
+                self.sort_direction = direction
+
+                # Update column headers with indicators
+                self._update_column_headers()
+
+                # Refresh with new sort
+                self.refresh_tasks()
+
+    def _restore_table_focus(self) -> None:
+        """Restore focus to the tasks table (Task 9)."""
+        try:
+            table = self.query_one("#tasks_table", DataTable)
+            table.focus()
+        except:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -647,10 +995,89 @@ class DoListTUI(App):
             self.action_edit_task()
         elif event.button.id == "refresh_btn":
             self.action_refresh()
+        elif event.button.id == "autorefresh_btn":
+            self.action_toggle_autorefresh()
+        elif event.button.id == "search_btn":
+            self.action_open_search()
+        elif event.button.id == "commands_btn":
+            self.action_command_palette()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection."""
         self.action_edit_task()
+
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Handle column header click for sorting (Task 5)."""
+        # Map column labels to internal column names
+        column_map = {
+            "ID": "id",
+            "Name": "name",
+            "Tag": "tag",
+            "Status": "status",
+            "Created": "created",
+        }
+
+        # Get the column label from the event
+        table = self.query_one("#tasks_table", DataTable)
+        column_key = event.column_key
+        column_label = str(column_key)
+
+        # Don't sort by Reminder or Notes columns
+        if column_label in ["Reminder", "Notes"]:
+            return
+
+        column_name = column_map.get(column_label)
+        if not column_name:
+            return
+
+        # Toggle sort: if same column, toggle direction; if new column, start with asc
+        if self.sort_column == column_name:
+            self.sort_direction = 'desc' if self.sort_direction == 'asc' else 'asc'
+        else:
+            self.sort_column = column_name
+            self.sort_direction = 'asc'
+
+        # Update column headers with sort indicators
+        self._update_column_headers()
+
+        # Refresh with new sort
+        self.refresh_tasks()
+
+    def _update_column_headers(self) -> None:
+        """Update column headers to show sort indicators (Task 5)."""
+        table = self.query_one("#tasks_table", DataTable)
+
+        # Map internal column names to labels
+        column_labels = {
+            "id": "ID",
+            "name": "Name",
+            "tag": "Tag",
+            "status": "Status",
+            "created": "Created",
+        }
+
+        # Clear and re-add columns with sort indicators
+        table.clear(columns=True)
+
+        for col_name in ["id", "name", "tag", "status"]:
+            label = column_labels[col_name]
+            if self.sort_column == col_name:
+                indicator = "▲" if self.sort_direction == 'asc' else "▼"
+                label = f"{label} {indicator}"
+            table.add_column(label, key=column_labels[col_name])
+
+        # Add non-sortable columns
+        table.add_column("Reminder", key="Reminder")
+        table.add_column("Notes", key="Notes")
+        table.add_column("Created", key="Created")
+
+        # If sorting by created, add indicator
+        if self.sort_column == "created":
+            # Remove and re-add with indicator
+            last_col_key = list(table.columns.keys())[-1]
+            table.remove_column(last_col_key)
+            indicator = "▲" if self.sort_direction == 'asc' else "▼"
+            table.add_column(f"Created {indicator}", key="Created")
 
 
 def run_tui(db, tasks_table, config=None):
