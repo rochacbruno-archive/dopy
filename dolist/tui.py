@@ -166,6 +166,11 @@ class SearchOverlay(ModalScreen):
                 filters = parse_search(self.search_text)
                 self.app.apply_search_filter(filters, live=True)
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key in search input."""
+        if event.input.id == "search_input":
+            self.action_apply_search()
+
     def action_cancel_search(self) -> None:
         """ESC: Close overlay and clear search."""
         if hasattr(self.app, "clear_search_filter"):
