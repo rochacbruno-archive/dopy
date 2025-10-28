@@ -420,13 +420,23 @@ def default_action(
     elif action == 'note':
         row.notes = row.notes or []
 
+        # Handle note addition (from args or stdin)
         if action_args:
             note_text = ' '.join(action_args)
             row.update_record(notes=row.notes + [note_text])
             db.commit()
             console.print(f"[green]✓ Note added to task {id}[/green]")
             console.print(f"[cyan]  {row.name}[/cyan]")
+        elif not sys.stdin.isatty():
+            # Read note from stdin
+            stdin_content = sys.stdin.read().strip()
+            if stdin_content:
+                row.update_record(notes=row.notes + [stdin_content])
+                db.commit()
+                console.print(f"[green]✓ Note added to task {id} from stdin[/green]")
+                console.print(f"[cyan]  {row.name}[/cyan]")
 
+        # Handle note removal
         if rm is not None:
             try:
                 del row.notes[rm]
@@ -534,7 +544,7 @@ def shell(use: Optional[str] = None):
 
 @app.command
 def add(
-    name: str,
+    name: Optional[str] = None,
     tag: str = "default",
     status: str = "new",
     reminder: Optional[str] = None,
@@ -543,13 +553,39 @@ def add(
     """Add a new task.
 
     Args:
-        name: Task name/description.
+        name: Task name/description. If not provided, reads from stdin (first line as name, rest as notes).
         tag: Task tag/category (default: "default").
         status: Task status (default: "new").
         reminder: Optional reminder text (e.g., "today", "2 hours", "next week").
         use: Database name to use (optional).
     """
     init_db(use)
+
+    notes = []
+
+    # Check if we should read from stdin
+    if name is None or name == "-":
+        # Read from stdin
+        if sys.stdin.isatty():
+            console.print("[red]Error: No task name provided and stdin is not available[/red]")
+            console.print("Usage: dolist add <name> or echo 'task' | dolist add")
+            return
+
+        stdin_lines = sys.stdin.read().strip().split('\n')
+        if not stdin_lines or not stdin_lines[0]:
+            console.print("[red]Error: Empty input from stdin[/red]")
+            return
+
+        # First line is the task name
+        name = stdin_lines[0].strip()
+
+        # Rest of the lines become notes
+        if len(stdin_lines) > 1:
+            notes = [line.strip() for line in stdin_lines[1:] if line.strip()]
+
+    if not name:
+        console.print("[red]Error: Task name cannot be empty[/red]")
+        return
 
     created_on = datetime.datetime.now()
     reminder_timestamp = None
@@ -570,10 +606,13 @@ def add(
         status=status or 'new',
         reminder=reminder,
         reminder_timestamp=reminder_timestamp,
+        notes=notes if notes else None,
         created_on=created_on
     )
     db.commit()
     rprint(f"[green]Task {task_id} inserted[/green]")
+    if notes:
+        rprint(f"[cyan]Added {len(notes)} note(s)[/cyan]")
 
 
 @app.command
