@@ -587,6 +587,9 @@ class DoListTUI(App):
         # Task 2: State for status filters
         self.active_status_filters = set()  # Empty = show all active (not done/cancel)
 
+        # All filter mode: 'active', 'inactive', or 'all'
+        self.all_filter_mode = 'active'  # Default to showing active tasks
+
         # Task 3: State for search filters
         self.search_filter = {}  # Dict with 'tag', 'status', 'text' keys
 
@@ -606,7 +609,7 @@ class DoListTUI(App):
         with Container(id="main_container"):
             # Task 2: Status filter toggle buttons with keyboard shortcuts
             with Horizontal(id="status_buttons"):
-                yield Button("^a All", variant="primary", classes="tight", id="status_all")
+                yield Button("^a All (active)", variant="primary", classes="tight", id="status_all")
                 yield Button("^n New", variant="default", classes="tight", id="status_new")
                 yield Button("^i In Progress", variant="default", classes="tight", id="status_in-progress")
                 yield Button("^d Done", variant="default", classes="tight", id="status_done")
@@ -616,6 +619,19 @@ class DoListTUI(App):
             # Main task table - this should get focus
             yield DataTable(id="tasks_table", cursor_type="row")
         yield Footer()
+
+    def _update_all_button_label(self) -> None:
+        """Update the All button label based on current all_filter_mode."""
+        try:
+            all_btn = self.query_one("#status_all", Button)
+            if self.all_filter_mode == 'active':
+                all_btn.label = "^a All (active)"
+            elif self.all_filter_mode == 'inactive':
+                all_btn.label = "^a All (inactive)"
+            elif self.all_filter_mode == 'all':
+                all_btn.label = "^a All (*)"
+        except:
+            pass
 
     def on_mount(self) -> None:
         """Set up the table when the app starts."""
@@ -756,8 +772,14 @@ class DoListTUI(App):
             # Task 2: If specific statuses are selected, show only those
             query &= self._tasks_table.status.belongs(list(self.active_status_filters))
         else:
-            # Default: show active tasks (not done/cancel/post)
-            query &= ~self._tasks_table.status.belongs(["done", "cancel", "post"])
+            # Use all_filter_mode to determine which tasks to show
+            if self.all_filter_mode == 'active':
+                # Show only active tasks (new, in-progress)
+                query &= self._tasks_table.status.belongs(["new", "in-progress"])
+            elif self.all_filter_mode == 'inactive':
+                # Show only inactive tasks (done, cancel, post)
+                query &= self._tasks_table.status.belongs(["done", "cancel", "post"])
+            # If 'all' mode, don't apply any status filter (show everything)
 
         # Task 3: Apply text search filter
         if 'text' in self.search_filter and self.search_filter['text']:
@@ -1048,9 +1070,19 @@ class DoListTUI(App):
         if event.button.id and event.button.id.startswith("status_"):
             status = event.button.id.replace("status_", "")
 
-            # Handle "All" button - clear all filters
+            # Handle "All" button - cycle through active/inactive/all modes
             if status == "all":
+                # Cycle through: active -> inactive -> all -> active
+                if self.all_filter_mode == 'active':
+                    self.all_filter_mode = 'inactive'
+                elif self.all_filter_mode == 'inactive':
+                    self.all_filter_mode = 'all'
+                else:  # 'all'
+                    self.all_filter_mode = 'active'
+
+                # Clear individual status filters when using All button
                 self.active_status_filters.clear()
+
                 # Reset all status buttons to default
                 for btn_id in ["status_new", "status_in-progress", "status_done", "status_cancel", "status_post"]:
                     try:
@@ -1058,8 +1090,13 @@ class DoListTUI(App):
                         btn.variant = "default"
                     except:
                         pass
+
                 # Set "All" button to primary
                 event.button.variant = "primary"
+
+                # Update the button label
+                self._update_all_button_label()
+
                 self.refresh_tasks()
                 return
 
@@ -1076,7 +1113,13 @@ class DoListTUI(App):
             # Update "All" button state
             try:
                 all_btn = self.query_one("#status_all", Button)
-                all_btn.variant = "default" if self.active_status_filters else "primary"
+                if self.active_status_filters:
+                    # Individual filters are active, deactivate All button
+                    all_btn.variant = "default"
+                else:
+                    # No individual filters, revert to All button with current mode
+                    all_btn.variant = "primary"
+                    self._update_all_button_label()
             except:
                 pass
 
