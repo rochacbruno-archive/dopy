@@ -470,6 +470,22 @@ class EditTaskScreen(ModalScreen):
 class DoListCommandProvider(Provider):
     """Custom command provider for DoList TUI (Task 4)."""
 
+    # Define available commands as a class constant for reuse
+    COMMANDS = [
+        ("Sort by Name (A-Z)", "sort-name-asc", "Sort tasks by name in ascending order"),
+        ("Sort by Name (Z-A)", "sort-name-desc", "Sort tasks by name in descending order"),
+        ("Sort by Created (Oldest)", "sort-created-asc", "Sort tasks by creation date (oldest first)"),
+        ("Sort by Created (Newest)", "sort-created-desc", "Sort tasks by creation date (newest first)"),
+        ("Sort by Status (A-Z)", "sort-status-asc", "Sort tasks by status in ascending order"),
+        ("Sort by Status (Z-A)", "sort-status-desc", "Sort tasks by status in descending order"),
+        ("Sort by Tag (A-Z)", "sort-tag-asc", "Sort tasks by tag in ascending order"),
+        ("Sort by Tag (Z-A)", "sort-tag-desc", "Sort tasks by tag in descending order"),
+        ("Sort by ID (Low-High)", "sort-id-asc", "Sort tasks by ID in ascending order"),
+        ("Sort by ID (High-Low)", "sort-id-desc", "Sort tasks by ID in descending order"),
+        ("Refresh", "refresh", "Manually refresh the task list"),
+        ("Quit", "quit", "Exit the TUI"),
+    ]
+
     def _make_callback(self, command_name: str):
         """Create a callback function for a command.
 
@@ -479,33 +495,25 @@ class DoListCommandProvider(Provider):
             self.app.run_command(command_name)
         return callback
 
+    async def discover(self):
+        """Discover commands when palette first opens (improves discoverability)."""
+        # Yield all commands when palette opens
+        for label, command_name, help_text in self.COMMANDS:
+            yield Hit(
+                score=1.0,
+                match_display=label,
+                command=self._make_callback(command_name),
+                help=help_text
+            )
+
     async def search(self, query: str):
         """Search for commands matching the query."""
         matcher = self.matcher(query)
 
-        # Define available commands
-        commands = [
-            ("Sort by Name (A-Z)", "sort-name-asc", "Sort tasks by name in ascending order"),
-            ("Sort by Name (Z-A)", "sort-name-desc", "Sort tasks by name in descending order"),
-            ("Sort by Created (Oldest)", "sort-created-asc", "Sort tasks by creation date (oldest first)"),
-            ("Sort by Created (Newest)", "sort-created-desc", "Sort tasks by creation date (newest first)"),
-            ("Sort by Status (A-Z)", "sort-status-asc", "Sort tasks by status in ascending order"),
-            ("Sort by Status (Z-A)", "sort-status-desc", "Sort tasks by status in descending order"),
-            ("Sort by Tag (A-Z)", "sort-tag-asc", "Sort tasks by tag in ascending order"),
-            ("Sort by Tag (Z-A)", "sort-tag-desc", "Sort tasks by tag in descending order"),
-            ("Sort by ID (Low-High)", "sort-id-asc", "Sort tasks by ID in ascending order"),
-            ("Sort by ID (High-Low)", "sort-id-desc", "Sort tasks by ID in descending order"),
-            ("Refresh", "refresh", "Manually refresh the task list"),
-            ("Quit", "quit", "Exit the TUI"),
-        ]
-
         # Yield Hit objects for each command
-        for label, command_name, help_text in commands:
-            # Calculate match score (handle empty query)
-            if query:
-                match_score = matcher.match(label)
-            else:
-                match_score = 1.0  # Show all commands when no query
+        for label, command_name, help_text in self.COMMANDS:
+            # Calculate match score
+            match_score = matcher.match(label)
 
             if match_score > 0:
                 yield Hit(
