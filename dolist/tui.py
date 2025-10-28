@@ -18,7 +18,7 @@ from textual.widgets import (
 )
 from textual.binding import Binding
 from textual.screen import ModalScreen
-from textual.command import Command, CommandPalette, Provider
+from textual.command import Hit, Provider
 from rich.text import Text
 from .reminder_parser import parse_reminder, format_reminder, get_time_until
 from functools import reduce
@@ -470,6 +470,15 @@ class EditTaskScreen(ModalScreen):
 class DoListCommandProvider(Provider):
     """Custom command provider for DoList TUI (Task 4)."""
 
+    def _make_callback(self, command_name: str):
+        """Create a callback function for a command.
+
+        This is a separate method to avoid closure issues with lambdas.
+        """
+        def callback():
+            self.app.run_command(command_name)
+        return callback
+
     async def search(self, query: str):
         """Search for commands matching the query."""
         matcher = self.matcher(query)
@@ -490,15 +499,20 @@ class DoListCommandProvider(Provider):
             ("Quit", "quit", "Exit the TUI"),
         ]
 
+        # Yield Hit objects for each command
         for label, command_name, help_text in commands:
-            match = matcher.match(label)
-            if match > 0:
-                yield Command(
-                    prompt=label,
-                    title=label,
-                    help=help_text,
-                    callback=lambda cmd=command_name: self.app.run_command(cmd),
-                    match=match
+            # Calculate match score (handle empty query)
+            if query:
+                match_score = matcher.match(label)
+            else:
+                match_score = 1.0  # Show all commands when no query
+
+            if match_score > 0:
+                yield Hit(
+                    score=match_score,
+                    match_display=label,
+                    command=self._make_callback(command_name),
+                    help=help_text
                 )
 
 
@@ -506,8 +520,11 @@ class DoListTUI(App):
     """A Textual TUI for DoList task management."""
 
     # Task 4: Register command provider
-    COMMAND_PROVIDERS = [DoListCommandProvider]
+    COMMANDS = App.COMMANDS | {DoListCommandProvider}
+    # Note: COMMAND_PALETTE_BINDING sets the key, but we also need explicit binding below
     COMMAND_PALETTE_BINDING = ":"
+    # Ensure command palette is enabled
+    ENABLE_COMMAND_PALETTE = True
     CSS = """
     Screen {
         background: $surface;
@@ -973,8 +990,9 @@ class DoListTUI(App):
                 self.sort_column = column
                 self.sort_direction = direction
 
-                # Update column headers with indicators
-                self._update_column_headers()
+                # Notify user of sort change
+                direction_text = "ascending" if direction == "asc" else "descending"
+                self.notify(f"Sorted by {column} ({direction_text})", severity="information")
 
                 # Refresh with new sort
                 self.refresh_tasks()
@@ -1042,17 +1060,20 @@ class DoListTUI(App):
             "Created": "created",
         }
 
-        # Get the column label from the event
-        table = self.query_one("#tasks_table", DataTable)
-        column_key = event.column_key
-        column_label = str(column_key)
+        # Get the column label from the event - use .label which is a Rich Text object
+        column_label = str(event.label.plain) if hasattr(event.label, 'plain') else str(event.label)
+
+        # Debug: notify that event was received
+        # self.notify(f"Header clicked: {column_label}", severity="information")
 
         # Don't sort by Reminder or Notes columns
         if column_label in ["Reminder", "Notes"]:
+            self.notify("Cannot sort by this column", severity="warning")
             return
 
         column_name = column_map.get(column_label)
         if not column_name:
+            self.notify(f"Unknown column: {column_label}", severity="error")
             return
 
         # Toggle sort: if same column, toggle direction; if new column, start with asc
@@ -1062,47 +1083,19 @@ class DoListTUI(App):
             self.sort_column = column_name
             self.sort_direction = 'asc'
 
-        # Update column headers with sort indicators
-        self._update_column_headers()
+        # Notify user of sort change
+        direction_text = "ascending" if self.sort_direction == 'asc' else "descending"
+        self.notify(f"Sorting by {column_name} ({direction_text})", severity="information")
 
         # Refresh with new sort
         self.refresh_tasks()
 
     def _update_column_headers(self) -> None:
         """Update column headers to show sort indicators (Task 5)."""
-        table = self.query_one("#tasks_table", DataTable)
-
-        # Map internal column names to labels
-        column_labels = {
-            "id": "ID",
-            "name": "Name",
-            "tag": "Tag",
-            "status": "Status",
-            "created": "Created",
-        }
-
-        # Clear and re-add columns with sort indicators
-        table.clear(columns=True)
-
-        for col_name in ["id", "name", "tag", "status"]:
-            label = column_labels[col_name]
-            if self.sort_column == col_name:
-                indicator = "▲" if self.sort_direction == 'asc' else "▼"
-                label = f"{label} {indicator}"
-            table.add_column(label, key=column_labels[col_name])
-
-        # Add non-sortable columns
-        table.add_column("Reminder", key="Reminder")
-        table.add_column("Notes", key="Notes")
-        table.add_column("Created", key="Created")
-
-        # If sorting by created, add indicator
-        if self.sort_column == "created":
-            # Remove and re-add with indicator
-            last_col_key = list(table.columns.keys())[-1]
-            table.remove_column(last_col_key)
-            indicator = "▲" if self.sort_direction == 'asc' else "▼"
-            table.add_column(f"Created {indicator}", key="Created")
+        # This method is no longer needed - we'll use a different approach
+        # Instead of clearing and re-adding columns, we'll just refresh the table
+        # The sort indicators will be shown in the status bar or via notifications
+        pass
 
 
 def run_tui(db, tasks_table, config=None):
