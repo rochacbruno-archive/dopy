@@ -27,11 +27,12 @@ optionally use your Dropbox to store the database
 - ✅ **Data Validation** with [Pydantic](https://github.com/pydantic/pydantic) models
 - 🗄️ **SQLite Database** for local task storage
 - 🏷️ **Tag Support** to organize tasks
-- 📝 **Notes** on tasks
+- 📝 **Notes** on tasks with stdin support for piping content
 - ⏰ **Smart Reminders** with flexible natural language parsing and background service
 - 🔔 **Desktop Notifications** for due reminders (with custom handler support)
 - 🔧 **Systemd Integration** for automatic reminder service
 - 💾 **Multiple Databases** support
+- 📥 **Stdin Support** for adding tasks and notes from pipes and files
 
 ## Requirements
 
@@ -116,14 +117,16 @@ dolist --help
 
 **Most common operations:**
 ```bash
-dolist                      # Launch TUI
-dolist --actions            # List all available actions
-dolist add "Task name"      # Add task
-dolist ls                   # List active tasks
-dolist 1 done               # Mark task 1 as done
-dolist 2 remind tomorrow    # Set reminder on task 2
-dolist 3 start              # Start working on task 3
-dolist 4                    # Edit task 4 interactively
+dolist                           # Launch TUI
+dolist --actions                 # List all available actions
+dolist add "Task name"           # Add task
+dolist ls                        # List active tasks
+dolist 1 done                    # Mark task 1 as done
+dolist 2 remind tomorrow         # Set reminder on task 2
+dolist 3 start                   # Start working on task 3
+dolist 4                         # Edit task 4 interactively
+echo "Note" | dolist 5 note      # Add note from stdin
+cat task.txt | dolist add        # Add task with notes from file
 ```
 
 ### Command Reference
@@ -139,7 +142,7 @@ dolist <id> [action] [args]
 **Available actions:**
 - `remind <time>` - Set a reminder (supports unquoted multi-word args)
 - `delay [time]` - Delay reminder (default: 10 minutes)
-- `note <text>` - Add a note (supports unquoted multi-word args)
+- `note <text>` - Add a note (supports unquoted multi-word args and stdin)
 - `note --rm <index>` - Remove a note by index
 - `done` - Mark as done
 - `cancel` - Mark as cancelled
@@ -163,6 +166,7 @@ dolist 3 delay 1 hour              # Delay reminder by 1 hour
 dolist 4 start                     # Start working on task 4
 dolist 5 note This is my note      # Add note (unquoted!)
 dolist 5 note "Or use quotes"      # Or use quotes
+echo "Note from stdin" | dolist 5 note  # Add note from stdin
 dolist 5 note --rm 0               # Remove first note
 dolist 6 show                      # Show details of task 6
 ```
@@ -360,6 +364,27 @@ With default values (tag=default, status=new, no reminder):
 ```bash
 dolist add "Implement new features on my project"
 ```
+
+**Adding tasks from stdin** (✨ New!):
+
+You can pipe content to `dolist add` to create tasks with notes:
+
+```bash
+# From a file (first line = task name, remaining lines = notes)
+cat task.txt | dolist add --tag work --reminder "2 hours"
+dolist add --tag work --reminder "2 hours" < task.txt
+
+# From echo (simple task without notes)
+echo "Simple task" | dolist add --tag urgent
+
+# Multi-line with echo
+echo -e "Task name\nFirst note\nSecond note" | dolist add --tag work
+```
+
+When using stdin:
+- The **first line** becomes the task name
+- All **remaining lines** are automatically added as notes to the task
+- Command-line options (`--tag`, `--reminder`, etc.) work as usual
 
 #### 4. List Tasks
 
@@ -713,8 +738,25 @@ You can add notes to tasks using their ID (visible in `dolist ls` output).
 
 ### Adding a Note
 
+Add a note directly as an argument:
+
 ```bash
 dolist 1 note "This is the note for task 1"
+```
+
+**Adding notes from stdin** (✨ New!):
+
+You can also pipe content to add notes:
+
+```bash
+# From echo
+echo "Hello World" | dolist 1 note
+
+# From a file
+cat notes.txt | dolist 9 note
+
+# Multi-line notes (preserved as-is)
+echo -e "Multi-line note\nwith several lines\nof content" | dolist 1 note
 ```
 
 The above command inserts the note and prints the task with notes:
