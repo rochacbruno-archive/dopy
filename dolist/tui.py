@@ -248,7 +248,9 @@ class AddTaskScreen(ModalScreen):
                 id="status_select",
             )
             yield Label("Reminder:")
-            yield Input(placeholder="Reminder (optional)", id="reminder_input")
+            yield Input(placeholder="e.g., 2h, 30min, tomorrow, next week", id="reminder_input")
+            yield Label("Notes:")
+            yield TextArea("", id="notes_textarea")
             with Horizontal():
                 yield Button("Add", variant="primary", classes="tight", id="add_btn")
                 yield Button("Cancel", variant="default", classes="tight", id="cancel_btn")
@@ -261,6 +263,7 @@ class AddTaskScreen(ModalScreen):
             tag_input = self.query_one("#tag_input", Input)
             status_select = self.query_one("#status_select", Select)
             reminder_input = self.query_one("#reminder_input", Input)
+            notes_textarea = self.query_one("#notes_textarea", TextArea)
 
             name = name_input.value.strip()
             if not name:
@@ -269,13 +272,18 @@ class AddTaskScreen(ModalScreen):
             tag = tag_input.value.strip() or "default"
             status = status_select.value or "new"
             reminder = reminder_input.value.strip() or None
+            notes_text = notes_textarea.text
+            notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
 
-            # Parse reminder
+            # Parse and validate reminder
             reminder_timestamp = None
             if reminder:
                 parsed_dt, error = parse_reminder(reminder)
-                if not error:
-                    reminder_timestamp = parsed_dt
+                if error:
+                    # Show validation error
+                    self.app.notify(f"Invalid reminder format: {error}", severity="error")
+                    return
+                reminder_timestamp = parsed_dt
 
             # Insert task
             created_on = datetime.now()
@@ -285,6 +293,7 @@ class AddTaskScreen(ModalScreen):
                 status=status,
                 reminder=reminder,
                 reminder_timestamp=reminder_timestamp,
+                notes=notes,
                 created_on=created_on,
             )
             self.db.commit()
@@ -360,7 +369,7 @@ class EditTaskScreen(ModalScreen):
             yield Label("Reminder:")
             yield Input(
                 value=self.task_row.reminder or "",
-                placeholder="Reminder (optional)",
+                placeholder="e.g., 2h, 30min, tomorrow, next week",
                 id="reminder_input",
             )
             yield Label("Notes:")
@@ -423,15 +432,18 @@ class EditTaskScreen(ModalScreen):
             notes_text = notes_textarea.text
             notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
 
-            # Parse reminder only if it changed
+            # Parse and validate reminder only if it changed
             reminder_timestamp = self.task_row.reminder_timestamp
             if reminder != self.task_row.reminder:
-                # Reminder text changed, re-parse it
+                # Reminder text changed, re-parse and validate it
                 reminder_timestamp = None
                 if reminder:
                     parsed_dt, error = parse_reminder(reminder)
-                    if not error:
-                        reminder_timestamp = parsed_dt
+                    if error:
+                        # Show validation error
+                        self.app.notify(f"Invalid reminder format: {error}", severity="error")
+                        return
+                    reminder_timestamp = parsed_dt
 
             # Update task
             self.task_row.update_record(
@@ -490,7 +502,7 @@ class DoListTUI(App):
 
     # Task 4: Register command provider
     COMMAND_PROVIDERS = [DoListCommandProvider]
-
+    COMMAND_PALETTE_BINDING = ":"
     CSS = """
     Screen {
         background: $surface;
@@ -519,29 +531,25 @@ class DoListTUI(App):
         width: 100%;
         height: 1fr;
     }
-
-    #button_container {
-        width: 100%;
-        height: 1;
-        align: center middle;
-        padding: 0;
-    }
-
-    #button_container Button {
-        margin: 0 1;
-        height: 1;
-        border: none;
-        min-width: 10;
-    }
     """
 
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", priority=True),
+        # Status filter keyboard shortcuts (hidden from footer)
+        Binding("ctrl+a", "filter_all", "", show=False),
+        Binding("ctrl+n", "filter_new", "", show=False),
+        Binding("ctrl+i", "filter_in_progress", "", show=False),
+        Binding("ctrl+d", "filter_done", "", show=False),
+        Binding("ctrl+c", "filter_cancel", "", show=False),
+        Binding("ctrl+p", "filter_post", "", show=False),
+        # Visible bindings in footer
         Binding("a", "add_task", "Add Task"),
+        Binding("e", "edit_task", "Edit"),
+        Binding("enter", "edit_task", "Edit", show=False),
         Binding("r", "refresh", "Refresh"),
+        Binding("x", "toggle_autorefresh", "Auto-Refresh"),
         Binding("/", "open_search", "Search"),
         Binding(":", "command_palette", "Commands"),
-        ("enter", "edit_task", "Edit"),
+        Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
 
     def __init__(self, db, tasks_table, config=None):
@@ -573,27 +581,17 @@ class DoListTUI(App):
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="main_container"):
-            # Task 2: Status filter toggle buttons
+            # Task 2: Status filter toggle buttons with keyboard shortcuts
             with Horizontal(id="status_buttons"):
-                yield Button("All", variant="primary", classes="tight", id="status_all")
-                yield Button("New", variant="default", classes="tight", id="status_new")
-                yield Button("In Progress", variant="default", classes="tight", id="status_in-progress")
-                yield Button("Done", variant="default", classes="tight", id="status_done")
-                yield Button("Cancel", variant="default", classes="tight", id="status_cancel")
-                yield Button("Post", variant="default", classes="tight", id="status_post")
+                yield Button("^a All", variant="primary", classes="tight", id="status_all")
+                yield Button("^n New", variant="default", classes="tight", id="status_new")
+                yield Button("^i In Progress", variant="default", classes="tight", id="status_in-progress")
+                yield Button("^d Done", variant="default", classes="tight", id="status_done")
+                yield Button("^c Cancel", variant="default", classes="tight", id="status_cancel")
+                yield Button("^p Post", variant="default", classes="tight", id="status_post")
 
             # Main task table - this should get focus
             yield DataTable(id="tasks_table", cursor_type="row")
-
-            # Bottom action buttons
-            with Horizontal(id="button_container"):
-                yield Button("Add Task (a)", variant="primary", classes="tight", id="add_task_btn")
-                yield Button("Edit (Enter)", variant="default", classes="tight", id="edit_task_btn")
-                yield Button("Search (/)", variant="default", classes="tight", id="search_btn")
-                yield Button("Commands (:)", variant="default", classes="tight", id="commands_btn")
-                yield Button("Refresh (r)", variant="default", classes="tight", id="refresh_btn")
-                yield Button("Auto-Refresh", variant="default", classes="tight", id="autorefresh_btn")
-                yield Button("Quit (Ctrl+Q)", variant="error", classes="tight", id="quit_btn")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -849,13 +847,7 @@ class DoListTUI(App):
             if self.autorefresh_timer:
                 self.autorefresh_timer.stop()
                 self.autorefresh_timer = None
-
-            # Update button variant
-            try:
-                btn = self.query_one("#autorefresh_btn", Button)
-                btn.variant = "default"
-            except:
-                pass
+            self.notify("✓ Auto-refresh disabled", severity="warning")
         else:
             # Enable auto-refresh
             self.autorefresh_enabled = True
@@ -864,17 +856,59 @@ class DoListTUI(App):
                     self.autorefresh_interval,
                     self.refresh_tasks
                 )
-
-            # Update button variant
-            try:
-                btn = self.query_one("#autorefresh_btn", Button)
-                btn.variant = "success"
-            except:
-                pass
+            self.notify(f"✓ Auto-refresh enabled ({self.autorefresh_interval}s)", severity="information")
 
     def action_open_search(self) -> None:
         """Open the search overlay (Task 3)."""
         self.push_screen(SearchOverlay())
+
+    def action_filter_all(self) -> None:
+        """Toggle 'All' status filter (Ctrl+A)."""
+        try:
+            btn = self.query_one("#status_all", Button)
+            btn.press()
+        except:
+            pass
+
+    def action_filter_new(self) -> None:
+        """Toggle 'New' status filter (Ctrl+N)."""
+        try:
+            btn = self.query_one("#status_new", Button)
+            btn.press()
+        except:
+            pass
+
+    def action_filter_in_progress(self) -> None:
+        """Toggle 'In Progress' status filter (Ctrl+I)."""
+        try:
+            btn = self.query_one("#status_in-progress", Button)
+            btn.press()
+        except:
+            pass
+
+    def action_filter_done(self) -> None:
+        """Toggle 'Done' status filter (Ctrl+D)."""
+        try:
+            btn = self.query_one("#status_done", Button)
+            btn.press()
+        except:
+            pass
+
+    def action_filter_cancel(self) -> None:
+        """Toggle 'Cancel' status filter (Ctrl+C)."""
+        try:
+            btn = self.query_one("#status_cancel", Button)
+            btn.press()
+        except:
+            pass
+
+    def action_filter_post(self) -> None:
+        """Toggle 'Post' status filter (Ctrl+P)."""
+        try:
+            btn = self.query_one("#status_post", Button)
+            btn.press()
+        except:
+            pass
 
     def apply_search_filter(self, filters: dict, live: bool = False) -> None:
         """Apply search filter and refresh tasks.
@@ -987,20 +1021,6 @@ class DoListTUI(App):
                 pass
 
             self.refresh_tasks()
-        elif event.button.id == "quit_btn":
-            self.action_quit()
-        elif event.button.id == "add_task_btn":
-            self.action_add_task()
-        elif event.button.id == "edit_task_btn":
-            self.action_edit_task()
-        elif event.button.id == "refresh_btn":
-            self.action_refresh()
-        elif event.button.id == "autorefresh_btn":
-            self.action_toggle_autorefresh()
-        elif event.button.id == "search_btn":
-            self.action_open_search()
-        elif event.button.id == "commands_btn":
-            self.action_command_palette()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection."""
