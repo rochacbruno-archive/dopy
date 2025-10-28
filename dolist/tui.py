@@ -567,6 +567,7 @@ class DoListTUI(App):
         Binding("a", "add_task", "Add Task"),
         Binding("e", "edit_task", "Edit"),
         Binding("enter", "edit_task", "Edit", show=False),
+        Binding("s", "cycle_status", "Cycle Status"),
         Binding("r", "refresh", "Refresh"),
         Binding("x", "toggle_autorefresh", "Auto-Refresh"),
         Binding("/", "open_search", "Search"),
@@ -856,6 +857,42 @@ class DoListTUI(App):
             task_row = self._tasks_table[int(row_key)]
             if task_row:
                 self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
+
+    def action_cycle_status(self) -> None:
+        """Cycle the status of the selected task through: new -> in-progress -> done -> post -> cancel."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the selected task
+        row_key = table.get_row_at(table.cursor_row)[0]
+        task_row = self._tasks_table[int(row_key)]
+        if not task_row:
+            return
+
+        # Define the status cycle
+        status_cycle = ["new", "in-progress", "done", "post", "cancel"]
+
+        # Get current status and find next status
+        current_status = task_row.status
+        try:
+            current_index = status_cycle.index(current_status)
+            next_index = (current_index + 1) % len(status_cycle)
+            next_status = status_cycle[next_index]
+        except ValueError:
+            # If current status is not in cycle, default to first status
+            next_status = status_cycle[0]
+
+        # Update the task status
+        task_row.update_record(status=next_status)
+        self.db.commit()
+
+        # Show notification
+        self.notify(f"Status changed: {current_status} → {next_status}", severity="information")
+
+        # Refresh the task list to show the change
+        self.refresh_tasks()
 
     def action_refresh(self) -> None:
         """Refresh the task list."""
