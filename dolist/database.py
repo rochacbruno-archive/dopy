@@ -159,7 +159,7 @@ class Table:
                 except (json.JSONDecodeError, TypeError):
                     data[col_name] = []
             # Handle datetime fields
-            elif col_name in ('created_on', 'reminder_timestamp') and value:
+            elif col_name in ('created_on', 'reminder_timestamp', 'changed_at') and value:
                 try:
                     data[col_name] = datetime.fromisoformat(value)
                 except (ValueError, TypeError):

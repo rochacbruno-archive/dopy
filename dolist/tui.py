@@ -419,6 +419,10 @@ class EditTaskScreen(ModalScreen):
             self.task_row.update_record(reminder="delayed: 10 minutes", reminder_timestamp=parsed_dt)
             self.db.commit()
 
+            # Record history
+            if hasattr(self.app, "_record_task_history"):
+                self.app._record_task_history(self.task_row)
+
             # Update the input field
             reminder_input = self.query_one("#reminder_input", Input)
             reminder_input.value = "delayed: 10 minutes"
@@ -428,6 +432,9 @@ class EditTaskScreen(ModalScreen):
             def confirm_delete():
                 self.task_row.update_record(deleted=True)
                 self.db.commit()
+                # Record history
+                if hasattr(self.app, "_record_task_history"):
+                    self.app._record_task_history(self.task_row)
                 self.app.pop_screen()
                 if hasattr(self.app, "refresh_tasks"):
                     self.app.refresh_tasks()
@@ -474,10 +481,243 @@ class EditTaskScreen(ModalScreen):
             )
             self.db.commit()
 
+            # Record history
+            if hasattr(self.app, "_record_task_history"):
+                self.app._record_task_history(self.task_row)
+
             self.app.pop_screen()
             # Refresh the main screen
             if hasattr(self.app, "refresh_tasks"):
                 self.app.refresh_tasks()
+
+
+class TaskHistoryScreen(ModalScreen):
+    """Modal screen for viewing task history."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Close"),
+    ]
+
+    CSS = """
+    TaskHistoryScreen {
+        align: center middle;
+    }
+
+    #history_dialog {
+        width: 90%;
+        max-width: 120;
+        height: 80%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+
+    #history_dialog Label {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #history_dialog DataTable {
+        width: 100%;
+        height: 1fr;
+    }
+
+    #history_dialog Button {
+        margin: 1 0;
+        width: 100%;
+    }
+    """
+
+    def __init__(self, task_row, history_table, db):
+        super().__init__()
+        self.task_row = task_row
+        self.history_table = history_table
+        self.db = db
+
+    def action_dismiss(self) -> None:
+        """Close and return to home screen."""
+        self.app.pop_screen()
+
+    def compose(self) -> ComposeResult:
+        with Container(id="history_dialog"):
+            yield Label(f"History for Task #{self.task_row.id}: {self.task_row.name}")
+            yield DataTable(id="history_table", cursor_type="row")
+            yield Button("Close", variant="default", id="close_btn")
+
+    def on_mount(self) -> None:
+        """Populate the history table when screen mounts."""
+        table = self.query_one("#history_table", DataTable)
+        table.add_columns("Changed At", "Name", "Tag", "Status", "Reminder", "Notes")
+
+        if self.history_table is None:
+            table.add_row("No history available", "", "", "", "", "")
+            return
+
+        # Query history for this task
+        try:
+            query = self.history_table.task_id == self.task_row.id
+            rows = self.db(query).select()
+
+            # Sort by changed_at descending (most recent first)
+            rows = sorted(rows, key=lambda r: r.changed_at, reverse=True)
+
+            if not rows:
+                table.add_row("No history recorded yet", "", "", "", "", "")
+                return
+
+            for row in rows:
+                # Format timestamp
+                changed_str = row.changed_at.strftime("%Y-%m-%d %H:%M:%S")
+
+                # Color status
+                status_text = row.status or ""
+                if row.status == "done":
+                    status_text = f"[green]{row.status}[/green]"
+                elif row.status == "in-progress":
+                    status_text = f"[yellow]{row.status}[/yellow]"
+                elif row.status == "cancel":
+                    status_text = f"[red]{row.status}[/red]"
+                elif row.status == "new":
+                    status_text = f"[blue]{row.status}[/blue]"
+                elif row.status == "post":
+                    status_text = f"[magenta]{row.status}[/magenta]"
+
+                # Format reminder
+                reminder_text = row.reminder or ""
+
+                # Format notes count
+                notes_count = len(row.notes) if row.notes else 0
+
+                table.add_row(
+                    changed_str,
+                    row.name or "",
+                    row.tag or "",
+                    status_text,
+                    reminder_text,
+                    str(notes_count),
+                )
+        except Exception as e:
+            table.add_row(f"Error loading history: {e}", "", "", "", "", "")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "close_btn":
+            self.app.pop_screen()
+
+
+class DatabaseSwitchScreen(ModalScreen):
+    """Modal screen for switching databases."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Cancel"),
+    ]
+
+    CSS = """
+    DatabaseSwitchScreen {
+        align: center middle;
+    }
+
+    #db_dialog {
+        width: 70%;
+        max-width: 60;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+
+    #db_dialog Label {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #db_dialog Select {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #db_dialog Input {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #db_dialog Horizontal {
+        width: 100%;
+        align: center middle;
+    }
+
+    #db_dialog Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, config_dir: str, current_db_path: str):
+        super().__init__()
+        self.config_dir = config_dir
+        self.current_db_path = current_db_path
+
+    def action_dismiss(self) -> None:
+        """Cancel and return to home screen."""
+        self.app.pop_screen()
+
+    def compose(self) -> ComposeResult:
+        from pathlib import Path
+
+        # Find all .db files in config directory
+        config_path = Path(self.config_dir)
+        db_files = list(config_path.glob("*.db"))
+
+        # Build options list: (label, value)
+        options = [("+ Create New Database", "new")]
+        for db_file in sorted(db_files):
+            db_name = db_file.name
+            if str(db_file) == self.current_db_path:
+                options.append((f"{db_name} (current)", str(db_file)))
+            else:
+                options.append((db_name, str(db_file)))
+
+        with Container(id="db_dialog"):
+            yield Label(f"Current: {Path(self.current_db_path).name}")
+            yield Label("Select Database:")
+            yield Select(
+                options=options,
+                prompt="Choose a database",
+                id="db_select",
+                allow_blank=False
+            )
+            yield Label("Or create new (enter name):")
+            yield Input(placeholder="e.g., work, project", id="new_db_input")
+            with Horizontal():
+                yield Button("Switch", variant="primary", id="switch_btn")
+                yield Button("Cancel", variant="default", id="cancel_btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.app.pop_screen()
+        elif event.button.id == "switch_btn":
+            from pathlib import Path
+
+            db_select = self.query_one("#db_select", Select)
+            new_db_input = self.query_one("#new_db_input", Input)
+
+            # Check if user wants to create a new database
+            if new_db_input.value.strip():
+                # Create new database
+                db_name = new_db_input.value.strip()
+                if not db_name.endswith('.db'):
+                    db_name += '.db'
+                new_db_path = Path(self.config_dir) / db_name
+
+                # Switch to new database
+                if hasattr(self.app, "switch_database"):
+                    self.app.switch_database(str(new_db_path))
+                self.app.pop_screen()
+            elif db_select.value and db_select.value != "new":
+                # Switch to selected database
+                if hasattr(self.app, "switch_database"):
+                    self.app.switch_database(db_select.value)
+                self.app.pop_screen()
+            else:
+                self.app.notify("Please select a database or enter a new name", severity="warning")
 
 
 class DoListCommandProvider(Provider):
@@ -557,6 +797,22 @@ class DoListTUI(App):
         padding: 0;
     }
 
+    #db_path {
+        width: 100%;
+        height: auto;
+        padding: 0 1;
+        background: $panel;
+        color: $text-muted;
+    }
+
+    #search_status {
+        width: 100%;
+        height: auto;
+        padding: 0 1;
+        background: $boost;
+        color: $text;
+    }
+
     #status_buttons {
         width: 100%;
         height: 1;
@@ -595,17 +851,22 @@ class DoListTUI(App):
         Binding("x", "toggle_autorefresh", "Auto-Refresh", show=False),
         Binding("/", "open_search", "Search"),
         Binding(":", "command_palette", "Commands"),
+        Binding("u", "switch_db", "Switch DB"),
+        Binding("h", "view_history", "History"),
         Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
 
-    def __init__(self, db, tasks_table, config=None):
+    def __init__(self, db, tasks_table, config=None, history_table=None):
         super().__init__()
         self.db = db
         self._tasks_table = tasks_table  # Use underscore prefix to avoid conflicts
+        self._history_table = history_table  # History table for tracking changes
         self.current_filter = {"tag": None, "status": None, "search": None, "show_all": False}
         self.config = config or {}
         self.config_file = config.get('config_file') if config else None
         self.selected_task_id = config.get('selected_task_id') if config else None
+        self.db_path = config.get('db_path', 'Unknown') if config else 'Unknown'
+        self.config_dir = config.get('config_dir', '') if config else ''
 
         # Task 2: State for status filters
         self.active_status_filters = set()  # Empty = show all active (not done/cancel)
@@ -633,6 +894,12 @@ class DoListTUI(App):
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="main_container"):
+            # Database path display
+            yield Static(f"[dim]Database: {self.db_path}[/dim]", id="db_path")
+
+            # Search status display
+            yield Static("", id="search_status")
+
             # Task 2: Status filter toggle buttons with keyboard shortcuts
             with Horizontal(id="status_buttons"):
                 yield Button("^a All (active)", variant="primary", classes="tight", id="status_all")
@@ -656,6 +923,66 @@ class DoListTUI(App):
                 all_btn.label = "^a All (inactive)"
             elif self.all_filter_mode == 'all':
                 all_btn.label = "^a All (*)"
+        except:
+            pass
+
+    def _record_task_history(self, task_row):
+        """Record a snapshot of the task to the history table.
+
+        Args:
+            task_row: The task row to record
+        """
+        if self._history_table is None:
+            return
+
+        try:
+            from datetime import datetime
+            self._history_table.insert(
+                changed_at=datetime.now(),
+                task_id=task_row.id,
+                name=task_row.name,
+                tag=task_row.tag,
+                status=task_row.status,
+                reminder=task_row.reminder,
+                reminder_timestamp=task_row.reminder_timestamp,
+                notes=task_row.notes,
+                created_on=task_row.created_on,
+                deleted=task_row.deleted,
+            )
+            self.db.commit()
+        except Exception as e:
+            # Don't fail if history recording fails
+            pass
+
+    def _update_search_status(self, result_count: int) -> None:
+        """Update the search status display based on current filters.
+
+        Args:
+            result_count: Number of results shown
+        """
+        try:
+            search_status = self.query_one("#search_status", Static)
+
+            # Build the search filter description
+            filter_parts = []
+
+            if 'text' in self.search_filter and self.search_filter['text']:
+                filter_parts.append(f"text: '{self.search_filter['text']}'")
+
+            if 'tag' in self.search_filter and self.search_filter['tag']:
+                tags = ', '.join(self.search_filter['tag'])
+                filter_parts.append(f"tag: {tags}")
+
+            if 'status' in self.search_filter and self.search_filter['status']:
+                statuses = ', '.join(self.search_filter['status'])
+                filter_parts.append(f"status: {statuses}")
+
+            if filter_parts:
+                filter_desc = ' | '.join(filter_parts)
+                search_status.update(f"[bold cyan]{result_count} results for /{filter_desc}[/bold cyan]")
+            else:
+                # No active search filter
+                search_status.update("")
         except:
             pass
 
@@ -896,6 +1223,9 @@ class DoListTUI(App):
             except:
                 pass
 
+        # Update search status display with result count
+        self._update_search_status(len(rows))
+
     def action_quit(self) -> None:
         """Quit the application (Task 9: cleanup timers)."""
         # Stop auto-refresh timer if running
@@ -952,6 +1282,8 @@ class DoListTUI(App):
         def confirm_delete():
             for task_row in tasks_to_delete:
                 task_row.update_record(deleted=True)
+                # Record history
+                self._record_task_history(task_row)
             self.db.commit()
 
             if len(tasks_to_delete) == 1:
@@ -1017,6 +1349,9 @@ class DoListTUI(App):
             task_row.update_record(status=next_status)
             status_changes.append((current_status, next_status))
 
+            # Record history
+            self._record_task_history(task_row)
+
         self.db.commit()
 
         # Show notification
@@ -1038,19 +1373,32 @@ class DoListTUI(App):
         if table.cursor_row is None:
             return
 
-        # Get the task ID from the current row
-        row_key = table.get_row_at(table.cursor_row)[0]
-        # Extract numeric ID from display (might be "✓ 123" or just "123")
-        task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+        # Get the task ID from the row key (not the displayed value)
+        # The key is set when we add_row() and should be the plain task ID as string
+        current_row = table.cursor_row
+        row_key = list(table.rows)[current_row]
+        task_id = int(row_key.value)
 
         # Toggle selection
-        if task_id in self.selected_task_ids:
+        was_selected = task_id in self.selected_task_ids
+        if was_selected:
             self.selected_task_ids.remove(task_id)
         else:
             self.selected_task_ids.add(task_id)
 
         # Refresh to show the selection change
         self.refresh_tasks()
+
+        # Move cursor: down if selecting, up if deselecting
+        total_rows = table.row_count
+        if not was_selected:
+            # Just selected - move cursor down to next row if available
+            if current_row < total_rows - 1:
+                table.move_cursor(row=current_row + 1)
+        else:
+            # Just deselected - move cursor up to previous row if available
+            if current_row > 0:
+                table.move_cursor(row=current_row - 1)
 
         # Show status in notification
         count = len(self.selected_task_ids)
@@ -1083,6 +1431,99 @@ class DoListTUI(App):
     def action_open_search(self) -> None:
         """Open the search overlay (Task 3)."""
         self.push_screen(SearchOverlay())
+
+    def action_switch_db(self) -> None:
+        """Open the database switch screen."""
+        if not self.config_dir:
+            self.notify("Config directory not set", severity="error")
+            return
+        self.push_screen(DatabaseSwitchScreen(self.config_dir, self.db_path))
+
+    def action_view_history(self) -> None:
+        """View history for the selected task."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the task ID from the row key
+        row_key = list(table.rows)[table.cursor_row]
+        task_id = int(row_key.value)
+        task_row = self._tasks_table[task_id]
+
+        if not task_row:
+            self.notify("Task not found", severity="error")
+            return
+
+        self.push_screen(TaskHistoryScreen(task_row, self._history_table, self.db))
+
+    def switch_database(self, new_db_path: str) -> None:
+        """Switch to a different database.
+
+        Args:
+            new_db_path: Full path to the new database file
+        """
+        from pathlib import Path
+        from .database import Database
+        from .database import FieldDef
+
+        try:
+            # Create database URI from path
+            db_filename = Path(new_db_path).name
+            db_uri = f"sqlite://{db_filename}"
+            config_dir = str(Path(new_db_path).parent)
+
+            # Initialize new database connection
+            new_db = Database(db_uri, folder=config_dir)
+            new_tasks_table = new_db.define_table("dolist_tasks",
+                FieldDef("name", "string"),
+                FieldDef("tag", "string"),
+                FieldDef("status", "string"),
+                FieldDef("reminder", "string"),
+                FieldDef("reminder_timestamp", "datetime"),
+                FieldDef("notes", "list:string"),
+                FieldDef("created_on", "datetime"),
+                FieldDef("deleted", "boolean", default=False),
+            )
+
+            # Also initialize history table
+            new_history_table = new_db.define_table("dolist_task_history",
+                FieldDef("changed_at", "datetime"),
+                FieldDef("task_id", "integer"),
+                FieldDef("name", "string"),
+                FieldDef("tag", "string"),
+                FieldDef("status", "string"),
+                FieldDef("reminder", "string"),
+                FieldDef("reminder_timestamp", "datetime"),
+                FieldDef("notes", "list:string"),
+                FieldDef("created_on", "datetime"),
+                FieldDef("deleted", "boolean", default=False),
+            )
+
+            # Switch to new database
+            self.db = new_db
+            self._tasks_table = new_tasks_table
+            self.db_path = new_db_path
+
+            # Update database path display
+            try:
+                db_path_widget = self.query_one("#db_path", Static)
+                db_path_widget.update(f"[dim]Database: {self.db_path}[/dim]")
+            except:
+                pass
+
+            # Clear selections and filters
+            self.selected_task_ids.clear()
+            self.search_filter = {}
+            self.active_status_filters.clear()
+            self.all_filter_mode = 'active'
+
+            # Refresh task list
+            self.refresh_tasks()
+
+            self.notify(f"Switched to: {Path(new_db_path).name}", severity="information")
+        except Exception as e:
+            self.notify(f"Error switching database: {e}", severity="error")
 
     def action_filter_all(self) -> None:
         """Toggle 'All' status filter (Ctrl+A)."""
@@ -1319,15 +1760,16 @@ class DoListTUI(App):
         pass
 
 
-def run_tui(db, tasks_table, config=None):
+def run_tui(db, tasks_table, config=None, history_table=None):
     """Run the Textual TUI.
 
     Args:
         db: Database connection
         tasks_table: Tasks table object
         config: Configuration dict with 'theme' and 'config_file' keys
+        history_table: TaskHistory table object (optional)
     """
-    app = DoListTUI(db, tasks_table, config)
+    app = DoListTUI(db, tasks_table, config, history_table)
     try:
         app.run()
     except Exception as e:

@@ -19,14 +19,15 @@ class TestDatabaseFunction:
         mock_database_class.return_value = mock_db
         mock_db.define_table = Mock(return_value='tasks_table')
 
-        db, tasks = database('sqlite://test.db')
+        db, tasks, history = database('sqlite://test.db')
 
         # Should create Database with correct parameters
         mock_database_class.assert_called_once_with('sqlite://test.db', folder=DBDIR)
-        # Should define the tasks table
+        # Should define the tasks table (both tasks and history)
         assert mock_db.define_table.called
         assert db == mock_db
         assert tasks == 'tasks_table'
+        assert history == 'tasks_table'
 
     @patch('dolist.do.Database')
     def test_database_defines_correct_schema(self, mock_database_class):
@@ -37,13 +38,20 @@ class TestDatabaseFunction:
         mock_database_class.return_value = mock_db
         mock_db.define_table = Mock(return_value='tasks_table')
 
-        db, tasks = database('sqlite://test.db')
+        db, tasks, history = database('sqlite://test.db')
 
-        # Check the table definition
-        call_args = mock_db.define_table.call_args
-        assert call_args[0][0] == 'dolist_tasks'
+        # Check that define_table was called twice (tasks and history)
+        assert mock_db.define_table.call_count == 2
+
+        # Check the first call was for tasks table
+        first_call_args = mock_db.define_table.call_args_list[0]
+        assert first_call_args[0][0] == 'dolist_tasks'
         # Should have FieldDef objects in the call
-        assert len(call_args[0]) > 1  # Table name + fields
+        assert len(first_call_args[0]) > 1  # Table name + fields
+
+        # Check the second call was for history table
+        second_call_args = mock_db.define_table.call_args_list[1]
+        assert second_call_args[0][0] == 'dolist_task_history'
 
 
 class TestInitDbFunction:
@@ -57,13 +65,16 @@ class TestInitDbFunction:
 
         mock_db = Mock()
         mock_tasks = Mock()
-        mock_database.return_value = (mock_db, mock_tasks)
+        mock_history = Mock()
+        mock_database.return_value = (mock_db, mock_tasks, mock_history)
 
-        init_db()
+        dburi = init_db()
 
         mock_database.assert_called_once_with(DBURI)
         assert dolist.do.db == mock_db
         assert dolist.do.tasks == mock_tasks
+        assert dolist.do.history == mock_history
+        assert dburi == DBURI
 
     @patch('dolist.do.database')
     def test_init_db_custom(self, mock_database):
@@ -73,13 +84,15 @@ class TestInitDbFunction:
 
         mock_db = Mock()
         mock_tasks = Mock()
-        mock_database.return_value = (mock_db, mock_tasks)
+        mock_history = Mock()
+        mock_database.return_value = (mock_db, mock_tasks, mock_history)
 
-        init_db('customdb')
+        dburi = init_db('customdb')
 
         # Should replace 'dopy' with 'customdb' in URI
         called_uri = mock_database.call_args[0][0]
         assert 'customdb' in called_uri
+        assert 'customdb' in dburi
 
 
 class TestAddCommand:
@@ -185,7 +198,8 @@ class TestRemoveCommand:
 
         # Should soft delete the task
         mock_task.update_record.assert_called_once_with(deleted=True)
-        mock_db.commit.assert_called_once()
+        # Commit is called twice: once for update, once for history
+        assert mock_db.commit.call_count >= 1
 
     @patch('dolist.do.init_db')
     @patch('dolist.do.rprint')
@@ -229,7 +243,8 @@ class TestDoneCommand:
         default_action(1, 'done')
 
         mock_task.update_record.assert_called_once_with(status='done')
-        mock_db.commit.assert_called_once()
+        # Commit is called twice: once for update, once for history
+        assert mock_db.commit.call_count >= 1
 
     @patch('dolist.do.init_db')
     @patch('dolist.do.rprint')

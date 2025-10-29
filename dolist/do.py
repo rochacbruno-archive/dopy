@@ -159,6 +159,7 @@ console = Console()
 # Global database connection
 db = None
 tasks = None
+history = None
 
 
 SHELLDOC = r"""
@@ -209,17 +210,66 @@ def database(DBURI):
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
     )
-    return _db, tasks
+
+    # TaskHistory table for tracking changes
+    history = _db.define_table("dolist_task_history",
+        FieldDef("changed_at", "datetime"),
+        FieldDef("task_id", "integer"),
+        FieldDef("name", "string"),
+        FieldDef("tag", "string"),
+        FieldDef("status", "string"),
+        FieldDef("reminder", "string"),
+        FieldDef("reminder_timestamp", "datetime"),
+        FieldDef("notes", "list:string"),
+        FieldDef("created_on", "datetime"),
+        FieldDef("deleted", "boolean", default=False),
+    )
+
+    return _db, tasks, history
 
 
 def init_db(use_db: Optional[str] = None):
-    """Initialize global database connection."""
-    global db, tasks
+    """Initialize global database connection.
+
+    Returns:
+        The database URI that was used
+    """
+    global db, tasks, history
     dburi = DBURI
     if use_db:
         # Replace database name in URI
         dburi = dburi.replace('tasks', use_db).replace('dopy', use_db)
-    db, tasks = database(dburi)
+    db, tasks, history = database(dburi)
+    return dburi
+
+
+def record_task_history(task_row):
+    """Record a snapshot of the task to the history table.
+
+    Args:
+        task_row: The task row to record
+    """
+    if history is None:
+        return
+
+    try:
+        from datetime import datetime
+        history.insert(
+            changed_at=datetime.now(),
+            task_id=task_row.id,
+            name=task_row.name,
+            tag=task_row.tag,
+            status=task_row.status,
+            reminder=task_row.reminder,
+            reminder_timestamp=task_row.reminder_timestamp,
+            notes=task_row.notes,
+            created_on=task_row.created_on,
+            deleted=task_row.deleted,
+        )
+        db.commit()
+    except Exception as e:
+        # Don't fail if history recording fails
+        pass
 
 
 # Create the Cyclopts app
@@ -259,7 +309,7 @@ def default_action(
         dolist 5 note This is a note  # Add note (unquoted)
     """
     global db, tasks
-    init_db(use)
+    dburi = init_db(use)
 
     # Show available actions if --actions flag is set
     if actions:
@@ -298,12 +348,17 @@ def default_action(
     # Parse tokens
     if not tokens:
         # No arguments - launch TUI
+        # Extract database path from URI
+        db_filename = dburi.replace('sqlite://', '')
+        db_path = Path(DBDIR) / db_filename
         tui_config = {
             'theme': CONFIG.get('theme', 'textual-dark'),
-            'config_file': str(CONFIGFILE)
+            'config_file': str(CONFIGFILE),
+            'db_path': str(db_path),
+            'config_dir': DBDIR
         }
         try:
-            run_tui(db, tasks, tui_config)
+            run_tui(db, tasks, tui_config, history)
         except KeyboardInterrupt:
             console.print("\n[yellow]TUI interrupted by user[/yellow]")
         except Exception as e:
@@ -338,42 +393,49 @@ def default_action(
     if action in ['start', 'in-progress']:
         row.update_record(status='in-progress')
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as in-progress[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
     elif action == 'done':
         row.update_record(status='done')
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as done[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
     elif action == 'cancel':
         row.update_record(status='cancel')
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as cancelled[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
     elif action == 'new':
         row.update_record(status='new')
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as new[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
     elif action == 'post':
         row.update_record(status='post')
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as postponed[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
     elif action in ['rm', 'delete']:
         row.update_record(deleted=True)
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Task {id} deleted[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
     elif action == 'clear-reminder':
         row.update_record(reminder=None, reminder_timestamp=None)
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Reminder cleared from task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
@@ -392,6 +454,7 @@ def default_action(
 
         row.update_record(reminder=reminder_time, reminder_timestamp=parsed_dt)
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Reminder set for task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
         console.print(f"[yellow]  Due: {format_reminder(parsed_dt)}[/yellow]")
@@ -413,6 +476,7 @@ def default_action(
 
         row.update_record(reminder=f"delayed: {delay_time}", reminder_timestamp=parsed_dt)
         db.commit()
+        record_task_history(row)
         console.print(f"[green]✓ Reminder delayed for task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
         console.print(f"[yellow]  New due time: {format_reminder(parsed_dt)}[/yellow]")
@@ -424,6 +488,7 @@ def default_action(
         if action_args:
             note_text = ' '.join(action_args)
             row.update_record(notes=row.notes + [note_text])
+            record_task_history(row)
             db.commit()
             console.print(f"[green]✓ Note added to task {id}[/green]")
             console.print(f"[cyan]  {row.name}[/cyan]")
@@ -454,18 +519,72 @@ def default_action(
     elif action == 'show':
         _show_task(row)
 
+    elif action == 'history':
+        # Show task history
+        if history is None:
+            console.print("[red]History table not available[/red]")
+            return
+
+        try:
+            query = history.task_id == id
+            history_rows = db(query).select()
+
+            # Sort by changed_at descending (most recent first)
+            history_rows = sorted(history_rows, key=lambda r: r.changed_at, reverse=True)
+
+            if not history_rows:
+                console.print(f"[yellow]No history recorded for task {id}[/yellow]")
+                console.print(f"[cyan]  {row.name}[/cyan]")
+                return
+
+            # Print history table
+            from rich.table import Table
+            from rich import box
+
+            console.print(f"\n[bold]History for Task #{id}: {row.name}[/bold]")
+
+            table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+            table.add_column("Changed At", style="cyan")
+            table.add_column("Name")
+            table.add_column("Tag")
+            table.add_column("Status", style="yellow")
+            table.add_column("Reminder")
+            table.add_column("Notes")
+
+            for hist_row in history_rows:
+                changed_str = hist_row.changed_at.strftime("%Y-%m-%d %H:%M:%S")
+                notes_count = len(hist_row.notes) if hist_row.notes else 0
+
+                table.add_row(
+                    changed_str,
+                    hist_row.name or "",
+                    hist_row.tag or "",
+                    hist_row.status or "",
+                    hist_row.reminder or "",
+                    str(notes_count)
+                )
+
+            console.print(table)
+        except Exception as e:
+            console.print(f"[red]Error loading history: {e}[/red]")
+
     elif action == 'get':
         _get_task_shell(row)
 
     elif action == 'edit':
         # Open TUI with this task selected
+        # Extract database path from URI
+        db_filename = dburi.replace('sqlite://', '')
+        db_path = Path(DBDIR) / db_filename
         tui_config = {
             'theme': CONFIG.get('theme', 'textual-dark'),
             'config_file': str(CONFIGFILE),
-            'selected_task_id': id
+            'selected_task_id': id,
+            'db_path': str(db_path),
+            'config_dir': DBDIR
         }
         try:
-            run_tui(db, tasks, tui_config)
+            run_tui(db, tasks, tui_config, history)
         except KeyboardInterrupt:
             console.print("\n[yellow]TUI interrupted by user[/yellow]")
         except Exception as e:
@@ -475,7 +594,7 @@ def default_action(
 
     else:
         rprint(f"[red]Unknown action: {action}[/red]")
-        rprint("[yellow]Valid actions: start, done, cancel, new, post, show, rm, delete, remind, delay, clear-reminder, note, get, edit[/yellow]")
+        rprint("[yellow]Valid actions: start, done, cancel, new, post, show, rm, delete, remind, delay, clear-reminder, note, get, edit, history[/yellow]")
 
 
 @app.command
