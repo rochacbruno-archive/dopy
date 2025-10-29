@@ -675,7 +675,79 @@ This command will:
 
 The backup file is stored in the same directory as your database (`~/.config/dolist/` by default).
 
-#### 8. Smart Reminders
+#### 8. Task Dependencies
+
+DoList supports task dependencies through special markers in task notes. This allows you to:
+- Block tasks until prerequisites are complete
+- Organize tasks into parent-child hierarchies
+- Navigate between related tasks
+
+##### Dependency Markers
+
+Add dependency markers to task notes using these patterns:
+
+```bash
+# Create a blocking dependency
+dolist add "Turn on the oven"                     # Task ID: 1
+dolist add "Bake the cake" --note "depends #1"    # Blocked until task 1 is done
+
+# Create a parent-child relationship
+dolist add "Sprint Planning" --note "under #5"    # This task is under task 5
+```
+
+**Markers:**
+- `depends #N` - This task is blocked until task N is complete
+- `under #N` - This task is a child/subtask of task N
+
+##### Visual Indicators
+
+Tasks with dependencies show special visual indicators:
+
+**Blocked Tasks (depends):**
+- Display: `2! Bake the cake` (shows blocking task ID)
+- Color: Red-ish text
+- Status: Shows as "blocked" (computed, cannot be manually changed)
+- Status is immutable while dependency exists
+
+**Child Tasks (under):**
+- Display: `5> Sprint Planning` (shows parent task ID)
+- Color: Yellow-ish text
+- Status: Can be changed normally
+
+**Parent Tasks:**
+- Display: `Turn on the oven (2)` (shows number of children)
+- Only shown when task has 1 or more children
+
+##### Navigation in TUI
+
+**Navigate to Parent:**
+- Press `p` while on a task to jump to its parent
+- Works for both `depends` and `under` relationships
+
+**Show Children:**
+- Press `c` while on a task to filter and show only its children
+- Applies `under=N` filter automatically
+
+##### CLI Filtering
+
+Filter tasks by parent ID:
+
+```bash
+# Show all tasks that depend on or are under task 3
+dolist ls --under 3
+
+# Combine with other filters
+dolist ls --under 5 --status new
+```
+
+##### Behavior Notes
+
+- If both `depends` and `under` markers exist, `depends` takes precedence for visual style
+- Blocked tasks cannot have their status changed (via CLI or TUI)
+- All other fields (name, tags, notes, priority, etc.) remain editable on blocked tasks
+- Deleting or completing a parent task doesn't automatically affect children
+
+#### 9. Smart Reminders
 
 DoList provides a powerful reminder system with natural language parsing and a background service for notifications.
 

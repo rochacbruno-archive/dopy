@@ -4,6 +4,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
+from .dependency import parse_dependencies, get_dependency_display_info
 
 
 class Task(BaseModel):
@@ -163,3 +164,38 @@ To exit
 
     def __repr__(self):
         return self.__str__()
+
+    def is_blocked(self) -> bool:
+        """Check if this task is blocked by a dependency.
+
+        Returns:
+            True if task has a 'depends #N' marker in notes
+        """
+        depends_on, _ = parse_dependencies(self.notes)
+        return depends_on is not None
+
+    def get_depends_on(self) -> Optional[int]:
+        """Get the task ID this task depends on.
+
+        Returns:
+            Task ID or None if no dependency
+        """
+        depends_on, _ = parse_dependencies(self.notes)
+        return depends_on
+
+    def get_under_ids(self) -> set[int]:
+        """Get set of parent task IDs.
+
+        Returns:
+            Set of task IDs this task is under
+        """
+        _, under_ids = parse_dependencies(self.notes)
+        return under_ids
+
+    def get_dependency_info(self) -> dict:
+        """Get complete dependency display information.
+
+        Returns:
+            Dictionary with dependency info for display
+        """
+        return get_dependency_display_info(self.id or 0, self.notes)

@@ -821,6 +821,7 @@ def ls(
     year: Optional[str] = None,
     priority: Optional[str] = None,
     size: Optional[str] = None,
+    under: Optional[int] = None,
     json: bool = False,
     action: Optional[str] = None,
     action_args: Optional[str] = None,
@@ -842,6 +843,7 @@ def ls(
         year: Filter by year.
         priority: Filter by priority (exact match or range like '>5', '>=3', '<2').
         size: Filter by size (U, S, M, L).
+        under: Filter by parent task ID (shows tasks that depend on or are under this task).
         json: Output in JSON format.
         action: Bulk action to perform on all matching tasks (done, start, cancel, new, post, delete, rm, remind).
         action_args: Arguments for the bulk action (e.g., reminder time).
@@ -971,6 +973,19 @@ def ls(
         for row in rows:
             task_size = row.get('size', 'U')
             if task_size == size_upper:
+                filtered_rows.append(row)
+
+        rows = filtered_rows
+
+    # Apply 'under' filter (post-query filtering for task dependencies)
+    if under is not None:
+        from .dependency import parse_dependencies
+        filtered_rows = []
+        for row in rows:
+            row_notes = row.notes or []
+            depends_on, under_ids = parse_dependencies(row_notes)
+            # Check if this task depends on or is under the specified parent
+            if depends_on == under or under in under_ids:
                 filtered_rows.append(row)
 
         rows = filtered_rows
@@ -1117,12 +1132,15 @@ def ls(
     # Get columns from config with default fallback
     columns_config = CONFIG.get('columns', ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"])
 
+    # Import dependency functions for display
+    from .dependency import get_dependency_display_info, count_children
+
     # Map column names to display names and formatting functions
     column_display_map = {
         'id': ('ID', lambda r: ID(str(r.id))),
-        'name': ('Name', lambda r: NAME(str(r.name))),
+        'name': ('Name', lambda r: r.get('_name_display', NAME(str(r.name)))),
         'tag': ('Tag', lambda r: TAG(str(r.tag))),
-        'status': ('Status', lambda r: STATUS(str(r.status))),
+        'status': ('Status', lambda r: r.get('_status_display', STATUS(str(r.status)))),
         'reminder': ('Reminder', lambda r: r.get('_reminder_display', '')),
         'notes': ('Notes', lambda r: str(len(r.notes) if r.notes else 0)),
         'created': ('Created', lambda r: str(r.created_on.strftime("%d/%m-%H:%M"))),
@@ -1151,6 +1169,34 @@ def ls(
 
         # Store reminder display for use in lambda
         row._reminder_display = reminder_display
+
+        # Compute dependency display info
+        dep_info = get_dependency_display_info(row.id, row.notes or [])
+
+        # Build name with dependency prefix
+        name_text = str(row.name)
+        if dep_info['display_prefix']:
+            name_text = f"{dep_info['display_prefix']} {name_text}"
+
+        # Count children to add suffix
+        child_count = count_children(row.id, rows)
+        if child_count > 0:
+            name_text = f"{name_text} ({child_count})"
+
+        # Apply color based on dependency type
+        if dep_info['prefix_type'] == 'blocked':
+            # Red-ish for blocked tasks
+            from .colors import redbold
+            row._name_display = redbold(name_text)
+            row._status_display = redbold("blocked")
+        elif dep_info['prefix_type'] == 'under':
+            # Yellow-ish for under tasks
+            from termcolor import colored
+            row._name_display = colored(name_text, 'yellow')
+            row._status_display = STATUS(str(row.status))
+        else:
+            row._name_display = NAME(name_text)
+            row._status_display = STATUS(str(row.status))
 
         # Build row based on configured columns
         fields = [column_display_map[col][1](row) for col in columns_config if col in column_display_map]

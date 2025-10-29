@@ -529,10 +529,19 @@ class EditTaskScreen(ModalScreen):
                 return
 
             tag = tag_input.value.strip() or "default"
-            status = status_select.value or "new"
             reminder = reminder_input.value.strip() or None
             notes_text = notes_textarea.text
             notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
+
+            # Check if task is blocked (cannot change status)
+            from dolist.dependency import parse_dependencies
+            depends_on, _ = parse_dependencies(self.task_row.notes or [])
+            if depends_on is not None:
+                # Task is blocked - use original status
+                status = self.task_row.status
+            else:
+                # Allow status change
+                status = status_select.value or "new"
 
             # Parse priority
             try:
@@ -952,6 +961,8 @@ class DoListTUI(App):
         Binding(":", "command_palette", "Commands"),
         Binding("u", "switch_db", "Switch DB"),
         Binding("h", "view_history", "History"),
+        Binding("p", "goto_parent", "Parent", show=False),
+        Binding("c", "show_children", "Children", show=False),
         Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
 
@@ -1091,6 +1102,9 @@ class DoListTUI(App):
                     filter_parts.append(f"size: {sizes}")
                 else:
                     filter_parts.append(f"size: {self.search_filter['size']}")
+
+            if 'under' in self.search_filter and self.search_filter['under']:
+                filter_parts.append(f"under: #{self.search_filter['under']}")
 
             if filter_parts:
                 filter_desc = ' | '.join(filter_parts)
@@ -1429,6 +1443,20 @@ class DoListTUI(App):
 
             rows = filtered_rows
 
+        # Apply 'under' filter (for task dependencies)
+        if 'under' in self.search_filter and self.search_filter['under']:
+            from dolist.dependency import parse_dependencies
+            filtered_rows = []
+            parent_id = self.search_filter['under']
+            for row in rows:
+                row_notes = row.notes or []
+                depends_on, under_ids = parse_dependencies(row_notes)
+                # Check if this task depends on or is under the specified parent
+                if depends_on == parent_id or parent_id in under_ids:
+                    filtered_rows.append(row)
+
+            rows = filtered_rows
+
         # Task 7: Apply current sort
         rows = self.apply_sort(rows)
 
@@ -1474,7 +1502,32 @@ class DoListTUI(App):
 
             row_data['priority'] = str(row.get('priority', 0))
             row_data['size'] = row.get('size', 'U')
-            row_data['name'] = row.name
+
+            # Handle dependency indicators
+            from dolist.dependency import get_dependency_display_info, count_children
+            dep_info = get_dependency_display_info(row.id, row.notes or [])
+
+            # Build name with dependency prefix
+            name_text = row.name
+            if dep_info['display_prefix']:
+                name_text = f"{dep_info['display_prefix']} {name_text}"
+
+            # Count children to add suffix
+            child_count = count_children(row.id, rows)
+            if child_count > 0:
+                name_text = f"{name_text} ({child_count})"
+
+            # Apply color based on dependency type
+            if dep_info['prefix_type'] == 'blocked':
+                # Red-ish for blocked tasks
+                row_data['name'] = f"[red]{name_text}[/red]"
+                status_text = "[red]blocked[/red]"
+            elif dep_info['prefix_type'] == 'under':
+                # Yellow-ish for under tasks
+                row_data['name'] = f"[yellow]{name_text}[/yellow]"
+            else:
+                row_data['name'] = name_text
+
             row_data['tag'] = row.tag
             row_data['status'] = status_text
             row_data['reminder'] = reminder_display
@@ -1609,6 +1662,13 @@ class DoListTUI(App):
         # Cycle status for all tasks
         status_changes = []
         for task_row in tasks_to_cycle:
+            # Check if task is blocked
+            from dolist.dependency import parse_dependencies
+            depends_on, _ = parse_dependencies(task_row.notes or [])
+            if depends_on is not None:
+                self.notify(f"Cannot change status of blocked task #{task_row.id}", severity="error")
+                continue
+
             current_status = task_row.status
             try:
                 current_index = status_cycle.index(current_status)
@@ -1627,18 +1687,19 @@ class DoListTUI(App):
 
         self.db.commit()
 
-        # Show notification
-        if len(tasks_to_cycle) == 1:
-            self.notify(f"Status changed: {status_changes[0][0]} → {status_changes[0][1]}", severity="information")
-        else:
-            self.notify(f"Status cycled for {len(tasks_to_cycle)} task(s)", severity="information")
+        # Show notification only if changes were made
+        if status_changes:
+            if len(status_changes) == 1:
+                self.notify(f"Status changed: {status_changes[0][0]} → {status_changes[0][1]}", severity="information")
+            else:
+                self.notify(f"Status cycled for {len(status_changes)} task(s)", severity="information")
 
-        # Clear selection after bulk operation
-        if self.selected_task_ids:
-            self.selected_task_ids.clear()
+            # Clear selection after bulk operation
+            if self.selected_task_ids:
+                self.selected_task_ids.clear()
 
-        # Refresh the task list to show the change
-        self.refresh_tasks()
+            # Refresh the task list to show the change
+            self.refresh_tasks()
 
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current task using space bar."""
@@ -1729,6 +1790,57 @@ class DoListTUI(App):
             return
 
         self.push_screen(TaskHistoryScreen(task_row, self._history_table, self.db))
+
+    def action_goto_parent(self) -> None:
+        """Navigate to parent task (if current task has dependency)."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the task ID from the row key
+        row_key = list(table.rows)[table.cursor_row]
+        task_id = int(row_key.value)
+        task_row = self._tasks_table[task_id]
+
+        if not task_row:
+            self.notify("Task not found", severity="error")
+            return
+
+        # Check for parent task in notes
+        from dolist.dependency import parse_dependencies
+        depends_on, under_ids = parse_dependencies(task_row.notes or [])
+
+        parent_id = depends_on if depends_on is not None else (min(under_ids) if under_ids else None)
+
+        if parent_id is None:
+            self.notify("Task has no parent", severity="warning")
+            return
+
+        # Find parent task in current view
+        for idx, row in enumerate(table.rows):
+            if int(row.value) == parent_id:
+                table.move_cursor(row=idx)
+                self.notify(f"Navigated to parent task #{parent_id}", severity="information")
+                return
+
+        self.notify(f"Parent task #{parent_id} not in current view", severity="warning")
+
+    def action_show_children(self) -> None:
+        """Show children tasks (tasks that depend on or are under current task)."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the task ID from the row key
+        row_key = list(table.rows)[table.cursor_row]
+        task_id = int(row_key.value)
+
+        # Apply filter to show only children
+        self.search_filter = {'under': task_id}
+        self.refresh_tasks()
+        self.notify(f"Showing children of task #{task_id}", severity="information")
 
     def switch_database(self, new_db_path: str) -> None:
         """Switch to a different database.
