@@ -28,7 +28,9 @@ def parse_search(search_text: str) -> dict:
     """Parse search syntax into filter dict.
 
     Examples:
-        /test → {'text': 'test'}
+        /test → {'text': 'test'} (searches both name and notes)
+        /name=test → {'name': 'test'} (searches only name)
+        /note=test → {'note': 'test'} (searches only notes)
         /tag=work → {'tag': ['work']}
         /tag=work,personal → {'tag': ['work', 'personal']}
         /status=new,done → {'status': ['new', 'done']}
@@ -62,10 +64,17 @@ def parse_search(search_text: str) -> dict:
                     filters['size'] = sizes[0]
                 else:
                     filters['size'] = sizes
+            elif key == 'name':
+                # Search only in task name
+                filters['name'] = value
+            elif key == 'note':
+                # Search only in task notes
+                filters['note'] = value
         else:
             remaining_text.append(part)
 
     if remaining_text:
+        # General text search (searches both name and notes)
         filters['text'] = ' '.join(remaining_text)
 
     return filters
@@ -1052,6 +1061,12 @@ class DoListTUI(App):
             if 'text' in self.search_filter and self.search_filter['text']:
                 filter_parts.append(f"text: '{self.search_filter['text']}'")
 
+            if 'name' in self.search_filter and self.search_filter['name']:
+                filter_parts.append(f"name: '{self.search_filter['name']}'")
+
+            if 'note' in self.search_filter and self.search_filter['note']:
+                filter_parts.append(f"note: '{self.search_filter['note']}'")
+
             if 'tag' in self.search_filter and self.search_filter['tag']:
                 tags = ', '.join(self.search_filter['tag'])
                 filter_parts.append(f"tag: {tags}")
@@ -1262,9 +1277,9 @@ class DoListTUI(App):
                 query &= self._tasks_table.status.belongs(["done", "cancel", "post"])
             # If 'all' mode, don't apply any status filter (show everything)
 
-        # Task 3: Apply text search filter
-        if 'text' in self.search_filter and self.search_filter['text']:
-            query &= self._tasks_table.name.like(f"%{self.search_filter['text']}%")
+        # Task 3: Apply specific name search filter
+        if 'name' in self.search_filter and self.search_filter['name']:
+            query &= self._tasks_table.name.like(f"%{self.search_filter['name']}%")
 
         # Task 3: Apply tag search filter (OR logic for multiple tags)
         if 'tag' in self.search_filter and self.search_filter['tag']:
@@ -1284,6 +1299,40 @@ class DoListTUI(App):
 
         # Get rows
         rows = self.db(query).select()
+
+        # Handle general text search (searches both name and notes, with name matches first)
+        if 'text' in self.search_filter and self.search_filter['text']:
+            name_matches = []
+            note_matches = []
+            search_text = self.search_filter['text'].lower()
+
+            for row in rows:
+                # Check if search term is in name
+                if search_text in row.name.lower():
+                    name_matches.append(row)
+                # Check if search term is in any note
+                elif row.notes:
+                    for note in row.notes:
+                        if search_text in note.lower():
+                            note_matches.append(row)
+                            break  # Only add once even if multiple notes match
+
+            # Combine with name matches first
+            rows = name_matches + note_matches
+
+        # Handle specific note search
+        elif 'note' in self.search_filter and self.search_filter['note']:
+            note_matches = []
+            note_text = self.search_filter['note'].lower()
+
+            for row in rows:
+                if row.notes:
+                    for task_note in row.notes:
+                        if note_text in task_note.lower():
+                            note_matches.append(row)
+                            break  # Only add once even if multiple notes match
+
+            rows = note_matches
 
         # Apply priority filter (post-query filtering to support range operators)
         if 'priority' in self.search_filter and self.search_filter['priority']:

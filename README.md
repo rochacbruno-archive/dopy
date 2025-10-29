@@ -338,7 +338,9 @@ The search overlay (`/`) supports powerful filtering:
 
 | Syntax | Example | Description |
 |--------|---------|-------------|
-| `text` | `/bug fix` | Filter tasks containing "bug fix" |
+| `text` | `/bug fix` | Search in both name and notes (name matches first) |
+| `name=value` | `/name=urgent` | Search only in task names |
+| `note=value` | `/note=meeting` | Search only in task notes |
 | `tag=value` | `/tag=work` | Filter by single tag |
 | `tag=a,b` | `/tag=work,home` | Filter by multiple tags (OR logic) |
 | `status=value` | `/status=new` | Filter by single status |
@@ -353,13 +355,15 @@ The search overlay (`/`) supports powerful filtering:
 | Combined | `/tag=work urgent` | Combine filters (tag=work AND text contains "urgent") |
 
 **Examples:**
-- `/bug` - Find all tasks with "bug" in the name
+- `/bug` - Find all tasks with "bug" in name or notes (name matches first)
+- `/name=urgent` - Find tasks with "urgent" in the name only
+- `/note=meeting` - Find tasks with "meeting" in notes only
 - `/tag=urgent` - Show only tasks tagged "urgent"
 - `/status=new,in-progress` - Show new or in-progress tasks
 - `/priority=>5` - Show high priority tasks (priority > 5)
 - `/size=M` - Show medium-sized tasks
 - `/tag=work priority=>=3` - Show work tasks with priority 3 or higher
-- `/tag=work test` - Show work tasks containing "test"
+- `/tag=work test` - Show work tasks with "test" in name or notes
 
 #### Command Palette
 
@@ -499,10 +503,22 @@ Filter by tag:
 dolist ls --tag personal
 ```
 
-Search by name:
+Search in both task names and notes (name matches first):
 
 ```bash
-dolist ls --search phone
+dolist ls --search phone     # Searches in both name and notes
+```
+
+Search only in task names:
+
+```bash
+dolist ls --name "important"  # Only searches task names
+```
+
+Search only in task notes:
+
+```bash
+dolist ls --note "meeting"    # Only searches task notes
 ```
 
 Filter by status:

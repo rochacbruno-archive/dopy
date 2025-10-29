@@ -568,7 +568,21 @@ class TestLsCommand:
         mock_tasks.name = Mock()
         mock_tasks.id = Mock()
 
+        # Create mock row with name and notes
+        from datetime import datetime
+        mock_row = Mock()
+        mock_row.id = 1
+        mock_row.name = "test task"
+        mock_row.notes = ["some note"]
+        mock_row.status = "new"
+        mock_row.tag = "default"
+        mock_row.created_on = datetime.now()
+        mock_row.reminder_timestamp = None
+        mock_row.get = lambda k, d=None: getattr(mock_row, k, d) if hasattr(mock_row, k) else d
+
         mock_query = Mock()
+        mock_query.select = Mock(return_value=[mock_row])
+
         mock_tasks.deleted.__ne__ = Mock(return_value=mock_query)
         mock_tasks.status.belongs = Mock(return_value=mock_query)
         mock_tasks.name.like = Mock(return_value=mock_query)
@@ -578,13 +592,16 @@ class TestLsCommand:
         mock_query.__invert__ = Mock(return_value=mock_query)
         mock_query.__and__ = Mock(return_value=mock_query)
 
-        dolist.do.db = mock_db
+        # Mock db to return mock_query
+        mock_db_call = Mock(return_value=mock_query)
+
+        dolist.do.db = mock_db_call
         dolist.do.tasks = mock_tasks
 
         ls(search="test")
 
-        # Should have applied search filter
-        assert mock_tasks.name.like.called
+        # Search now filters post-query, so we just check db was queried
+        assert mock_db_call.called
 
 
 class TestShowAction:

@@ -800,6 +800,8 @@ def ls(
     tag: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    name: Optional[str] = None,
+    note: Optional[str] = None,
     date: Optional[str] = None,
     month: Optional[str] = None,
     day: Optional[str] = None,
@@ -818,7 +820,9 @@ def ls(
         all: Show all tasks including done/cancelled.
         tag: Filter by tag.
         status: Filter by status.
-        search: Search in task names.
+        search: Search in both task names and notes (name matches first, then notes).
+        name: Search only in task names.
+        note: Search only in task notes.
         date: Filter by date.
         month: Filter by month.
         day: Filter by day.
@@ -840,10 +844,46 @@ def ls(
         query &= tasks.tag == tag
     if status:
         query &= tasks.status == status
-    if search:
-        query &= tasks.name.like('%%%s%%' % search.lower())
+
+    # Handle specific name search
+    if name:
+        query &= tasks.name.like('%%%s%%' % name.lower())
 
     rows = db(query).select()
+
+    # Handle general search (searches both name and notes, with name matches first)
+    if search:
+        name_matches = []
+        note_matches = []
+        search_lower = search.lower()
+
+        for row in rows:
+            # Check if search term is in name
+            if search_lower in row.name.lower():
+                name_matches.append(row)
+            # Check if search term is in any note
+            elif row.notes:
+                for note in row.notes:
+                    if search_lower in note.lower():
+                        note_matches.append(row)
+                        break  # Only add once even if multiple notes match
+
+        # Combine with name matches first
+        rows = name_matches + note_matches
+
+    # Handle specific note search
+    elif note:
+        note_matches = []
+        note_lower = note.lower()
+
+        for row in rows:
+            if row.notes:
+                for task_note in row.notes:
+                    if note_lower in task_note.lower():
+                        note_matches.append(row)
+                        break  # Only add once even if multiple notes match
+
+        rows = note_matches
 
     # Apply priority filter (post-query filtering to support range operators)
     if priority:
