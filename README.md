@@ -1,14 +1,12 @@
 DoList
 ======
-
-     ██████████            ████   ███           █████   
-    ░░███░░░░███          ░░███  ░░░           ░░███    
-     ░███   ░░███  ██████  ░███  ████   █████  ███████  
-     ░███    ░███ ███░░███ ░███ ░░███  ███░░  ░░░███░   
-     ░███    ░███░███ ░███ ░███  ░███ ░░█████   ░███    
-     ░███    ███ ░███ ░███ ░███  ░███  ░░░░███  ░███ ███
-     ██████████  ░░██████  █████ █████ ██████   ░░█████ 
-    ░░░░░░░░░░    ░░░░░░  ░░░░░ ░░░░░ ░░░░░░     ░░░░░  
+```
+  ____        _ _     _
+ |  _ \  ___ | (_)___| |_
+ | | | |/ _ \| | / __| __|
+ | |_| | (_) | | \__ \ |_
+ |____/ \___/|_|_|___/\__|
+```
 
 To Do list on Command Line Interface
 
@@ -18,21 +16,21 @@ optionally use your Dropbox to store the database
 
 ![image](https://raw.github.com/rochacbruno/dolist/master/dolist.svg)
 
-## ✨ Features
+## Features
 
-- 🎨 **Modern CLI** powered by [Cyclopts](https://github.com/BrianPugh/cyclopts) with type hints
-- 📊 **Beautiful Tables** using [Rich](https://github.com/Textualize/rich) library
-- 🖥️ **Interactive TUI Mode** with [Textual](https://github.com/Textualize/textual) for graphical terminal interface
-- 🐍 **Enhanced Python REPL** with [ptpython](https://github.com/prompt-toolkit/ptpython) featuring syntax highlighting and auto-completion
-- ✅ **Data Validation** with [Pydantic](https://github.com/pydantic/pydantic) models
-- 🗄️ **SQLite Database** for local task storage
-- 🏷️ **Tag Support** to organize tasks
-- 📝 **Notes** on tasks with stdin support for piping content
-- ⏰ **Smart Reminders** with flexible natural language parsing and background service
-- 🔔 **Desktop Notifications** for due reminders (with custom handler support)
-- 🔧 **Systemd Integration** for automatic reminder service
-- 💾 **Multiple Databases** support
-- 📥 **Stdin Support** for adding tasks and notes from pipes and files
+- **Modern CLI** powered by [Cyclopts](https://github.com/BrianPugh/cyclopts) with type hints
+- **Beautiful Tables** using [Rich](https://github.com/Textualize/rich) library
+- **Interactive TUI Mode** with [Textual](https://github.com/Textualize/textual) for graphical terminal interface
+- **Enhanced Python REPL** with [ptpython](https://github.com/prompt-toolkit/ptpython) featuring syntax highlighting and auto-completion
+- **Data Validation** with [Pydantic](https://github.com/pydantic/pydantic) models
+- **SQLite Database** for local task storage
+- **Tag Support** to organize tasks
+- **Notes** on tasks with stdin support for piping content
+- **Smart Reminders** with flexible natural language parsing and background service
+- **Desktop Notifications** for due reminders (with custom handler support)
+- **Systemd Integration** for automatic reminder service
+- **Multiple Databases** support
+- **Stdin Support** for adding tasks and notes from pipes and files
 
 ## Requirements
 
@@ -41,7 +39,7 @@ optionally use your Dropbox to store the database
 
 ## Installation
 
-### Option 1: Using uvx from PyPI (⭐ Recommended)
+### Option 1: Using uvx from PyPI (Recommended)
 
 The easiest way to use DoList is with `uvx` - no installation or cloning needed:
 
@@ -113,7 +111,7 @@ dolist --help
     |____/ \___/|_|_|___/\__|
 ```
 
-### ⚡ Quick Reference
+### Quick Reference
 
 **Most common operations:**
 ```bash
@@ -233,13 +231,13 @@ dolist
 ```
 
 Features of TUI mode:
-- 📊 **Interactive table view** of tasks with sortable columns
-- ✏️ **Add/Edit/Delete** tasks via modal dialogs
-- 🔍 **Advanced search** with vim-like `/` syntax
-- 📋 **Status filters** with toggle buttons
-- 🔄 **Auto-refresh** with configurable interval
-- 🎯 **Command palette** for quick actions
-- 💾 **State preservation** across refreshes
+- **Interactive table view** of tasks with sortable columns
+- **Add/Edit/Delete** tasks via modal dialogs
+- **Advanced search** with vim-like `/` syntax
+- **Status filters** with toggle buttons
+- **Auto-refresh** with configurable interval
+- **Command palette** for quick actions
+- **State preservation** across refreshes
 
 #### Keyboard Shortcuts
 
@@ -328,12 +326,12 @@ dolist shell
 ```
 
 Features of the modern REPL:
-- 🎨 **Syntax highlighting** for Python code
-- ⚡ **Auto-completion** with Tab key
-- 📝 **Signature hints** for functions
-- 🔍 **History search** with Ctrl+R
-- ⌨️ **Vi/Emacs mode** toggle with F2
-- 📊 Access to `tasklist`, `db`, and `tasks` objects
+- **Syntax highlighting** for Python code
+- **Auto-completion** with Tab key
+- **Signature hints** for functions
+- **History search** with Ctrl+R
+- **Vi/Emacs mode** toggle with F2
+- Access to `tasklist`, `db`, and `tasks` objects
 
 Example REPL session:
 ```python
@@ -365,7 +363,7 @@ With default values (tag=default, status=new, no reminder):
 dolist add "Implement new features on my project"
 ```
 
-**Adding tasks from stdin** (✨ New!):
+**Adding tasks from stdin** (New!):
 
 You can pipe content to `dolist add` to create tasks with notes:
 
@@ -428,7 +426,7 @@ List all tasks (including done/cancelled):
 dolist ls --all
 ```
 
-**JSON Output** (✨ New!):
+**JSON Output** (New!):
 
 Export tasks as JSON for scripting and integration:
 
@@ -447,7 +445,7 @@ dolist ls --json | jq '.[] | select(.status == "new")'  # Filter in jq
 dolist ls --status new --json | jq -r '.[].name'   # Get task names only
 ```
 
-**Bulk Actions** (✨ New!):
+**Bulk Actions** (New!):
 
 Perform actions on multiple tasks at once with confirmation:
 
@@ -505,7 +503,7 @@ dolist 3 delete            # Delete task
 dolist 4 get               # Interactive Python shell for task 4
 ```
 
-**Unquoted Multi-Word Arguments** (✨ New!):
+**Unquoted Multi-Word Arguments** (New!):
 
 You can now pass multi-word arguments without quotes:
 
@@ -744,7 +742,7 @@ Add a note directly as an argument:
 dolist 1 note "This is the note for task 1"
 ```
 
-**Adding notes from stdin** (✨ New!):
+**Adding notes from stdin** (New!):
 
 You can also pipe content to add notes:
 
@@ -842,12 +840,12 @@ uv run pytest -v
 ```
 
 **Test Coverage**: 127 tests covering all major components
-- ✅ Colors module (22 tests)
-- ✅ Database module (12 tests)
-- ✅ Print table module (33 tests)
-- ✅ Task model with Pydantic (18 tests)
-- ✅ Main application with Cyclopts (21 tests)
-- ✅ New CLI features (21 tests) - *New!*
+- Colors module (22 tests)
+- Database module (12 tests)
+- Print table module (33 tests)
+- Task model with Pydantic (18 tests)
+- Main application with Cyclopts (21 tests)
+- New CLI features (21 tests) - *New!*
 
 See [README_TESTS.md](README_TESTS.md) for detailed testing documentation.
 
@@ -942,19 +940,16 @@ This project is open source. See the repository for license details.
 
 ## Roadmap
 
-- [x] Migrate from docopt to Cyclopts ✅
-- [x] Add Rich table rendering ✅
-- [x] Create Textual TUI mode ✅
-- [x] Implement Pydantic models ✅
-- [x] Lightweight SQLite database wrapper ✅
-- [x] Comprehensive test suite (105 tests) ✅
-- [x] Smart reminders with natural language parsing ✅
-- [x] Background reminder service with systemd support ✅
-- [x] Desktop notifications for reminders ✅
-- [ ] Add export functionality (JSON, CSV, HTML)
+- [x] Migrate from docopt to Cyclopts
+- [x] Add Rich table rendering
+- [x] Create Textual TUI mode
+- [x] Implement Pydantic models
+- [x] Lightweight SQLite database wrapper
+- [x] Comprehensive test suite (105 tests)
+- [x] Smart reminders with natural language parsing
+- [x] Background reminder service with systemd support
+- [x] Desktop notifications for reminders
+- [x] Add export functionality JSON
 - [ ] Implement task priorities
 - [ ] Add recurring tasks
-- [ ] Cloud sync support (Dropbox, Google Drive)
-- [ ] Integration with external services (Todoist, Google Tasks)
-- [ ] Advanced filtering and sorting options
 - [ ] Task dependencies and subtasks
