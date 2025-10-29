@@ -118,6 +118,7 @@ class TestAddCommand:
             status='new',
             reminder=None,
             reminder_timestamp=None,
+            notes=None,
             created_on=mock_now
         )
 

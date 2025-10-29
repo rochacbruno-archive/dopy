@@ -427,8 +427,8 @@ def default_action(
             db.commit()
             console.print(f"[green]✓ Note added to task {id}[/green]")
             console.print(f"[cyan]  {row.name}[/cyan]")
-        elif not sys.stdin.isatty():
-            # Read note from stdin
+        elif rm is None and not sys.stdin.isatty():
+            # Read note from stdin (but only if not removing a note)
             stdin_content = sys.stdin.read().strip()
             if stdin_content:
                 row.update_record(notes=row.notes + [stdin_content])
