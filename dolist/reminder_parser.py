@@ -87,21 +87,31 @@ def normalize_unit(unit: str) -> Optional[str]:
     return UNIT_ABBREV.get(unit_lower)
 
 
-def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Optional[datetime], Optional[str]]:
-    """Parse reminder text into a datetime.
+def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Optional[datetime], Optional[str], Optional[str]]:
+    """Parse reminder text into a datetime and optional repeat interval.
 
     Args:
-        text: Reminder text (e.g., "today", "tomorrow", "2 hours", "next week")
+        text: Reminder text (e.g., "today", "tomorrow", "2 hours", "2 hours repeat")
         base_time: Base time for calculations (defaults to now)
 
     Returns:
-        Tuple of (datetime, error_message). If parsing fails, datetime is None.
+        Tuple of (datetime, error_message, repeat_interval).
+        - If parsing fails, datetime is None and error_message is set.
+        - If "repeat" keyword is present, repeat_interval contains the interval string (e.g., "2 hours").
+        - Otherwise, repeat_interval is None.
     """
     if not text:
-        return None, "Reminder text is empty"
+        return None, "Reminder text is empty", None
 
     text = text.strip().lower()
     base = base_time or datetime.now()
+
+    # Check for "repeat" keyword at the end
+    repeat_interval = None
+    if text.endswith(' repeat'):
+        # Extract the repeat interval (everything before "repeat")
+        text = text[:-7].strip()  # Remove " repeat"
+        repeat_interval = text  # Store the interval for recurring reminders
 
     # Special cases
     if text == 'today':
@@ -110,12 +120,12 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
         if result <= base:
             # If it's already past 15:00, use tomorrow at 15:00
             result = result + timedelta(days=1)
-        return result, None
+        return result, None, repeat_interval
 
     if text == 'tomorrow':
         # Tomorrow at 9:00 AM
         result = base.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        return result, None
+        return result, None, repeat_interval
 
     # Pattern: "next <unit>"
     next_match = re.match(r'^next\s+(\w+)$', text)
@@ -124,23 +134,23 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
         normalized = normalize_unit(unit)
 
         if normalized == 'hours':
-            return base + timedelta(hours=1), None
+            return base + timedelta(hours=1), None, repeat_interval
         elif normalized == 'days':
-            return base + timedelta(days=1), None
+            return base + timedelta(days=1), None, repeat_interval
         elif normalized == 'weeks':
-            return base + timedelta(weeks=1), None
+            return base + timedelta(weeks=1), None, repeat_interval
         elif normalized == 'months':
             # Approximate as 30 days
-            return base + timedelta(days=30), None
+            return base + timedelta(days=30), None, repeat_interval
         elif normalized == 'quarters':
             # 3 months ≈ 90 days
-            return base + timedelta(days=90), None
+            return base + timedelta(days=90), None, repeat_interval
         elif normalized == 'years':
-            return base + timedelta(days=365), None
+            return base + timedelta(days=365), None, repeat_interval
         elif normalized == 'decades':
-            return base + timedelta(days=3650), None
+            return base + timedelta(days=3650), None, repeat_interval
         else:
-            return None, f"Unknown unit in 'next {unit}'"
+            return None, f"Unknown unit in 'next {unit}'", None
 
     # Pattern: "<number> <unit>"
     number_match = re.match(r'^(\d+)\s*(\w+)$', text)
@@ -151,34 +161,34 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
             normalized = normalize_unit(unit)
 
             if not normalized:
-                return None, f"Unknown time unit: {unit}"
+                return None, f"Unknown time unit: {unit}", None
 
             if normalized == 'seconds':
-                return base + timedelta(seconds=amount), None
+                return base + timedelta(seconds=amount), None, repeat_interval
             elif normalized == 'minutes':
-                return base + timedelta(minutes=amount), None
+                return base + timedelta(minutes=amount), None, repeat_interval
             elif normalized == 'hours':
-                return base + timedelta(hours=amount), None
+                return base + timedelta(hours=amount), None, repeat_interval
             elif normalized == 'days':
-                return base + timedelta(days=amount), None
+                return base + timedelta(days=amount), None, repeat_interval
             elif normalized == 'weeks':
-                return base + timedelta(weeks=amount), None
+                return base + timedelta(weeks=amount), None, repeat_interval
             elif normalized == 'months':
                 # Approximate as 30 days per month
-                return base + timedelta(days=amount * 30), None
+                return base + timedelta(days=amount * 30), None, repeat_interval
             elif normalized == 'quarters':
                 # 3 months per quarter
-                return base + timedelta(days=amount * 90), None
+                return base + timedelta(days=amount * 90), None, repeat_interval
             elif normalized == 'years':
-                return base + timedelta(days=amount * 365), None
+                return base + timedelta(days=amount * 365), None, repeat_interval
             elif normalized == 'decades':
-                return base + timedelta(days=amount * 3650), None
+                return base + timedelta(days=amount * 3650), None, repeat_interval
             else:
-                return None, f"Unsupported unit: {normalized}"
+                return None, f"Unsupported unit: {normalized}", None
         except ValueError as e:
-            return None, f"Invalid number: {e}"
+            return None, f"Invalid number: {e}", None
 
-    return None, f"Could not parse reminder: '{text}'"
+    return None, f"Could not parse reminder: '{text}'", None
 
 
 def format_reminder(dt: datetime) -> str:

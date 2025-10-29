@@ -165,6 +165,8 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
         config: Configuration dictionary
         check_interval: Seconds between checks (default: 30)
     """
+    from .reminder_parser import parse_reminder
+
     console.print("[bold green]DoList Reminder Service Started[/bold green]")
     console.print(f"[cyan]Checking for reminders every {check_interval} seconds[/cyan]")
     console.print("[yellow]Press Ctrl+C to stop[/yellow]\n")
@@ -204,11 +206,29 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
                     # Trigger reminder
                     trigger_reminder(task_data, config)
 
-                    # Clear the reminder timestamp so it doesn't trigger again
-                    task_row.update_record(reminder_timestamp=None)
-                    db.commit()
+                    # Check if this is a recurring reminder
+                    reminder_repeat = getattr(task_row, 'reminder_repeat', None)
 
-                    console.print(f"[green]✓ Reminder cleared for task #{task_row.id}[/green]\n")
+                    if reminder_repeat:
+                        # Reschedule the reminder
+                        console.print(f"[cyan]Rescheduling recurring reminder: {reminder_repeat}[/cyan]")
+                        next_dt, error, _ = parse_reminder(reminder_repeat)
+
+                        if next_dt and not error:
+                            task_row.update_record(reminder_timestamp=next_dt)
+                            db.commit()
+                            console.print(f"[green]✓ Reminder rescheduled for {next_dt.strftime('%Y-%m-%d %H:%M:%S')}[/green]\n")
+                        else:
+                            console.print(f"[red]Failed to reschedule: {error}[/red]")
+                            # Clear the reminder if parsing fails
+                            task_row.update_record(reminder_timestamp=None)
+                            db.commit()
+                            console.print(f"[yellow]Reminder cleared due to parsing error[/yellow]\n")
+                    else:
+                        # One-time reminder: clear it
+                        task_row.update_record(reminder_timestamp=None)
+                        db.commit()
+                        console.print(f"[green]✓ Reminder cleared for task #{task_row.id}[/green]\n")
 
             # Wait before next check
             time.sleep(check_interval)

@@ -24,6 +24,7 @@ To exit
     tag: str = "default"
     status: str = "new"
     reminder: Optional[str] = None
+    reminder_repeat: Optional[str] = None  # For recurring reminders (e.g., "2 hours")
     notes: list[str] = Field(default_factory=list)
     created_on: datetime = Field(default_factory=datetime.now)
     deleted: bool = False
@@ -80,6 +81,7 @@ To exit
             tag=row.tag,
             status=row.status,
             reminder=row.reminder,
+            reminder_repeat=row.get('reminder_repeat', None),
             notes=row.notes or [],
             created_on=row.created_on,
             deleted=row.deleted,
@@ -115,6 +117,11 @@ To exit
         """Update the task reminder."""
         self.reminder = value
         self._update_db(reminder=value)
+
+    def update_reminder_repeat(self, value: Optional[str]):
+        """Update the task reminder repeat interval."""
+        self.reminder_repeat = value
+        self._update_db(reminder_repeat=value)
 
     def update_notes(self, value: list[str]):
         """Update the task notes."""

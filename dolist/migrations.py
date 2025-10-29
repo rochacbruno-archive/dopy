@@ -93,9 +93,48 @@ def migrate_to_v1_priority_and_size(db_conn):
     print("Migration v1 completed successfully.")
 
 
+def migrate_to_v2_recurring_reminders(db_conn):
+    """
+    Migration v2: Add recurring reminder support.
+
+    Changes:
+    - Add 'reminder_repeat' TEXT to dolist_tasks (stores repeat interval like "2 hours")
+    - Add 'reminder_repeat' TEXT to dolist_task_history
+    """
+    # Check if dolist_tasks table exists - if not, skip migration (new database)
+    cursor = db_conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='dolist_tasks'"
+    )
+    if not cursor.fetchone():
+        return  # Table doesn't exist yet, skip migration
+
+    # Check if migration is needed
+    if column_exists(db_conn, 'dolist_tasks', 'reminder_repeat'):
+        return  # Already migrated
+
+    print("Running migration v2: Adding recurring reminder support...")
+
+    # Add reminder_repeat column to dolist_tasks
+    if not column_exists(db_conn, 'dolist_tasks', 'reminder_repeat'):
+        db_conn.execute("ALTER TABLE dolist_tasks ADD COLUMN reminder_repeat TEXT")
+
+    # Add reminder_repeat column to dolist_task_history if it exists
+    cursor = db_conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='dolist_task_history'"
+    )
+    if cursor.fetchone():
+        if not column_exists(db_conn, 'dolist_task_history', 'reminder_repeat'):
+            db_conn.execute("ALTER TABLE dolist_task_history ADD COLUMN reminder_repeat TEXT")
+
+    db_conn.commit()
+    set_schema_version(db_conn, 2)
+    print("Migration v2 completed successfully.")
+
+
 # List of all migrations in order
 MIGRATIONS = [
     migrate_to_v1_priority_and_size,
+    migrate_to_v2_recurring_reminders,
 ]
 
 

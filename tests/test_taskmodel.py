@@ -25,6 +25,7 @@ class TestTaskModel:
         row.tag = 'work'
         row.status = 'new'
         row.reminder = 'today'
+        row.reminder_repeat = None
         row.notes = ['Note 1', 'Note 2']
         row.created_on = datetime(2024, 1, 1, 12, 0, 0)
         row.deleted = False
@@ -229,6 +230,7 @@ class TestTaskEdgeCases:
         row.tag = 'default'
         row.status = 'new'
         row.reminder = None
+        row.reminder_repeat = None
         row.notes = None
         row.created_on = datetime.now()
         row.deleted = False
@@ -256,6 +258,7 @@ class TestTaskEdgeCases:
         row.tag = 'default'
         row.status = 'new'
         row.reminder = None
+        row.reminder_repeat = None
         row.notes = []
         row.created_on = datetime.now()
         row.deleted = False
@@ -275,6 +278,7 @@ class TestTaskEdgeCases:
         row.tag = 'default'
         row.status = 'new'
         row.reminder = 'something'
+        row.reminder_repeat = None
         row.notes = []
         row.created_on = datetime.now()
         row.deleted = False

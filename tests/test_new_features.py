@@ -231,7 +231,7 @@ class TestBulkActions:
 
     @patch('dolist.do.init_db')
     @patch('dolist.do.console')
-    @patch('dolist.do.parse_reminder', return_value=(datetime(2024, 1, 5), None))
+    @patch('dolist.do.parse_reminder', return_value=(datetime(2024, 1, 5), None, None))
     @patch('builtins.input', return_value='yes')
     def test_bulk_action_remind(self, mock_input, mock_parse, mock_console, mock_init_db):
         """Test bulk action to set reminders."""
@@ -327,7 +327,7 @@ class TestUnquotedArgs:
 
     @patch('dolist.do.init_db')
     @patch('dolist.do.console')
-    @patch('dolist.do.parse_reminder', return_value=(datetime(2024, 1, 1, 14, 0), None))
+    @patch('dolist.do.parse_reminder', return_value=(datetime(2024, 1, 1, 14, 0), None, None))
     def test_remind_unquoted_args(self, mock_parse, mock_console, mock_init_db):
         """Test remind action with unquoted multi-word args."""
         import dolist.do
@@ -642,7 +642,7 @@ class TestDelayAction:
 
         # Mock parse_reminder to return a future datetime
         future_time = datetime(2024, 1, 1, 15, 0)
-        mock_parse.return_value = (future_time, None)
+        mock_parse.return_value = (future_time, None, None)
 
         mock_row = Mock()
         mock_row.id = 1
@@ -678,7 +678,7 @@ class TestDelayAction:
         from dolist.do import default_action
 
         future_time = datetime(2024, 1, 1, 14, 10)
-        mock_parse.return_value = (future_time, None)
+        mock_parse.return_value = (future_time, None, None)
 
         mock_row = Mock()
         mock_row.id = 1

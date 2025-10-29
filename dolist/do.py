@@ -237,6 +237,7 @@ def database(DBURI):
         FieldDef("status", "string"),
         FieldDef("reminder", "string"),
         FieldDef("reminder_timestamp", "datetime"),
+        FieldDef("reminder_repeat", "string"),  # For recurring reminders (e.g., "2 hours")
         FieldDef("notes", "list:string"),
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
@@ -253,6 +254,7 @@ def database(DBURI):
         FieldDef("status", "string"),
         FieldDef("reminder", "string"),
         FieldDef("reminder_timestamp", "datetime"),
+        FieldDef("reminder_repeat", "string"),
         FieldDef("notes", "list:string"),
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
@@ -481,20 +483,24 @@ def default_action(
             console.print("[red]Error: remind requires a time argument[/red]")
             console.print("Usage: dolist <id> remind <time>")
             console.print("Example: dolist 1 remind 2 hours")
+            console.print("Example: dolist 1 remind 2 hours repeat  (for recurring)")
             return
 
         reminder_time = ' '.join(action_args)
-        parsed_dt, error = parse_reminder(reminder_time)
+        parsed_dt, error, repeat_interval = parse_reminder(reminder_time)
         if error:
             console.print(f"[red]Error parsing reminder: {error}[/red]")
             return
 
-        row.update_record(reminder=reminder_time, reminder_timestamp=parsed_dt)
+        row.update_record(reminder=reminder_time, reminder_timestamp=parsed_dt, reminder_repeat=repeat_interval)
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Reminder set for task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
-        console.print(f"[yellow]  Due: {format_reminder(parsed_dt)}[/yellow]")
+        if repeat_interval:
+            console.print(f"[yellow]  Due: {format_reminder(parsed_dt)} (repeats every {repeat_interval})[/yellow]")
+        else:
+            console.print(f"[yellow]  Due: {format_reminder(parsed_dt)}[/yellow]")
 
     elif action == 'delay':
         # Check if task has a reminder
@@ -506,11 +512,12 @@ def default_action(
         # Default to 10 minutes if no time specified
         delay_time = ' '.join(action_args) if action_args else "10 minutes"
 
-        parsed_dt, error = parse_reminder(delay_time)
+        parsed_dt, error, _ = parse_reminder(delay_time)
         if error:
             console.print(f"[red]Error parsing delay time: {error}[/red]")
             return
 
+        # Keep the original reminder_repeat if it exists (delay doesn't change recurrence)
         row.update_record(reminder=f"delayed: {delay_time}", reminder_timestamp=parsed_dt)
         db.commit()
         record_task_history(row)
@@ -755,16 +762,21 @@ def add(
 
     created_on = datetime.datetime.now()
     reminder_timestamp = None
+    reminder_repeat = None
 
     # Parse reminder if provided
     if reminder:
-        parsed_dt, error = parse_reminder(reminder)
+        parsed_dt, error, repeat_interval = parse_reminder(reminder)
         if error:
             rprint(f"[yellow]Warning: Could not parse reminder '{reminder}': {error}[/yellow]")
             rprint("[yellow]Task will be created without a reminder timestamp.[/yellow]")
         else:
             reminder_timestamp = parsed_dt
-            rprint(f"[cyan]Reminder set for: {format_reminder(parsed_dt)}[/cyan]")
+            reminder_repeat = repeat_interval
+            if repeat_interval:
+                rprint(f"[cyan]Recurring reminder set for: {format_reminder(parsed_dt)} (repeats every {repeat_interval})[/cyan]")
+            else:
+                rprint(f"[cyan]Reminder set for: {format_reminder(parsed_dt)}[/cyan]")
 
     # Normalize size value
     size_upper = size.upper()
@@ -783,6 +795,7 @@ def add(
         status=status or 'new',
         reminder=reminder,
         reminder_timestamp=reminder_timestamp,
+        reminder_repeat=reminder_repeat,
         notes=notes if notes else None,
         created_on=created_on,
         priority=priority,
@@ -1056,11 +1069,11 @@ def ls(
                     console.print("[red]Error: remind action requires time argument[/red]")
                     console.print("Usage: dolist ls ... --action remind --action-args '2 hours'")
                     return
-                parsed_dt, error = parse_reminder(action_args)
+                parsed_dt, error, repeat_interval = parse_reminder(action_args)
                 if error:
                     console.print(f"[red]Error parsing reminder: {error}[/red]")
                     return
-                row.update_record(reminder=action_args, reminder_timestamp=parsed_dt)
+                row.update_record(reminder=action_args, reminder_timestamp=parsed_dt, reminder_repeat=repeat_interval)
             else:
                 console.print(f"[red]Unknown action: {action}[/red]")
                 return
@@ -1534,11 +1547,13 @@ def import_tasks(
                 existing_task = result[0]
                 # Parse reminder if provided
                 reminder_timestamp = None
+                reminder_repeat = None
                 reminder_text = task_data.get('reminder')
                 if reminder_text:
-                    parsed_dt, error = parse_reminder(reminder_text)
+                    parsed_dt, error, repeat_interval = parse_reminder(reminder_text)
                     if not error:
                         reminder_timestamp = parsed_dt
+                        reminder_repeat = repeat_interval
 
                 # Update task fields and undelete if necessary
                 existing_task.update_record(
@@ -1547,6 +1562,7 @@ def import_tasks(
                     status=task_data.get('status', 'new'),
                     reminder=reminder_text,
                     reminder_timestamp=reminder_timestamp,
+                    reminder_repeat=reminder_repeat,
                     notes=task_data.get('notes', []),
                     deleted=False  # Undelete the task when importing
                 )
@@ -1559,10 +1575,12 @@ def import_tasks(
             # Create new task
             reminder_text = task_data.get('reminder')
             reminder_timestamp = None
+            reminder_repeat = None
             if reminder_text:
-                parsed_dt, error = parse_reminder(reminder_text)
+                parsed_dt, error, repeat_interval = parse_reminder(reminder_text)
                 if not error:
                     reminder_timestamp = parsed_dt
+                    reminder_repeat = repeat_interval
 
             new_task_id = tasks.insert(
                 name=task_name,
@@ -1570,6 +1588,7 @@ def import_tasks(
                 status=task_data.get('status', 'new'),
                 reminder=reminder_text,
                 reminder_timestamp=reminder_timestamp,
+                reminder_repeat=reminder_repeat,
                 notes=task_data.get('notes', []),
                 created_on=datetime.datetime.now()
             )

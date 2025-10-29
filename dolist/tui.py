@@ -290,7 +290,7 @@ class AddTaskScreen(ModalScreen):
                 id="status_select",
             )
             yield Label("Reminder:")
-            yield Input(placeholder="e.g., 2h, 30min, tomorrow, next week", id="reminder_input")
+            yield Input(placeholder="e.g., 2h, 30min, tomorrow, 2h repeat", id="reminder_input")
             yield Label("Priority:")
             yield Input(placeholder="Priority (number, default: 0)", id="priority_input")
             yield Label("Size:")
@@ -346,13 +346,15 @@ class AddTaskScreen(ModalScreen):
 
             # Parse and validate reminder
             reminder_timestamp = None
+            reminder_repeat = None
             if reminder:
-                parsed_dt, error = parse_reminder(reminder)
+                parsed_dt, error, repeat_interval = parse_reminder(reminder)
                 if error:
                     # Show validation error
                     self.app.notify(f"Invalid reminder format: {error}", severity="error")
                     return
                 reminder_timestamp = parsed_dt
+                reminder_repeat = repeat_interval
 
             # Insert task
             created_on = datetime.now()
@@ -362,6 +364,7 @@ class AddTaskScreen(ModalScreen):
                 status=status,
                 reminder=reminder,
                 reminder_timestamp=reminder_timestamp,
+                reminder_repeat=reminder_repeat,
                 notes=notes,
                 created_on=created_on,
                 priority=priority,
@@ -440,7 +443,7 @@ class EditTaskScreen(ModalScreen):
             yield Label("Reminder:")
             yield Input(
                 value=self.task_row.reminder or "",
-                placeholder="e.g., 2h, 30min, tomorrow, next week",
+                placeholder="e.g., 2h, 30min, tomorrow, 2h repeat",
                 id="reminder_input",
             )
             yield Label("Priority:")
@@ -482,12 +485,12 @@ class EditTaskScreen(ModalScreen):
                 return
 
             # Parse "10 minutes" to get new timestamp
-            parsed_dt, error = parse_reminder("10 minutes")
+            parsed_dt, error, _ = parse_reminder("10 minutes")
             if error:
                 self.app.notify(f"Error: {error}", severity="error")
                 return
 
-            # Update the reminder timestamp
+            # Update the reminder timestamp (keep existing reminder_repeat)
             self.task_row.update_record(reminder="delayed: 10 minutes", reminder_timestamp=parsed_dt)
             self.db.commit()
 
@@ -543,16 +546,19 @@ class EditTaskScreen(ModalScreen):
 
             # Parse and validate reminder only if it changed
             reminder_timestamp = self.task_row.reminder_timestamp
+            reminder_repeat = getattr(self.task_row, 'reminder_repeat', None)
             if reminder != self.task_row.reminder:
                 # Reminder text changed, re-parse and validate it
                 reminder_timestamp = None
+                reminder_repeat = None
                 if reminder:
-                    parsed_dt, error = parse_reminder(reminder)
+                    parsed_dt, error, repeat_interval = parse_reminder(reminder)
                     if error:
                         # Show validation error
                         self.app.notify(f"Invalid reminder format: {error}", severity="error")
                         return
                     reminder_timestamp = parsed_dt
+                    reminder_repeat = repeat_interval
 
             # Update task
             self.task_row.update_record(
@@ -561,6 +567,7 @@ class EditTaskScreen(ModalScreen):
                 status=status,
                 reminder=reminder,
                 reminder_timestamp=reminder_timestamp,
+                reminder_repeat=reminder_repeat,
                 notes=notes,
                 priority=priority,
                 size=size,
@@ -1747,6 +1754,7 @@ class DoListTUI(App):
                 FieldDef("status", "string"),
                 FieldDef("reminder", "string"),
                 FieldDef("reminder_timestamp", "datetime"),
+                FieldDef("reminder_repeat", "string"),
                 FieldDef("notes", "list:string"),
                 FieldDef("created_on", "datetime"),
                 FieldDef("deleted", "boolean", default=False),
@@ -1763,6 +1771,7 @@ class DoListTUI(App):
                 FieldDef("status", "string"),
                 FieldDef("reminder", "string"),
                 FieldDef("reminder_timestamp", "datetime"),
+                FieldDef("reminder_repeat", "string"),
                 FieldDef("notes", "list:string"),
                 FieldDef("created_on", "datetime"),
                 FieldDef("deleted", "boolean", default=False),

@@ -705,6 +705,12 @@ dolist add "Renewal" --reminder "6 months"
 dolist add "Quick task" --reminder "10 mins"    # 10 minutes
 dolist add "Short break" --reminder "2 hrs"     # 2 hours
 dolist add "Follow-up" --reminder "5 d"         # 5 days
+
+# Recurring reminders (repeating tasks)
+dolist add "Drink water" --reminder "2 hours repeat"      # Repeats every 2 hours
+dolist add "Daily standup" --reminder "tomorrow repeat"   # Repeats daily
+dolist add "Weekly review" --reminder "1 week repeat"     # Repeats weekly
+dolist add "Take medication" --reminder "8 hours repeat"  # Repeats every 8 hours
 ```
 
 **Supported time units:**
@@ -774,6 +780,12 @@ By default, DoList uses `notify-send` to display desktop notifications with:
 - 10-second display duration
 - Service checks every **30 seconds** for due reminders
 - Done/cancelled tasks are excluded from reminder notifications
+
+**Recurring reminders behavior:**
+- When a recurring reminder triggers, it automatically reschedules for the next occurrence
+- Example: A task with "2 hours repeat" will trigger every 2 hours indefinitely
+- The reminder service handles rescheduling automatically - no manual intervention needed
+- To stop a recurring reminder, clear the reminder or mark the task as done/cancelled
 
 ##### Custom Reminder Handlers
 
