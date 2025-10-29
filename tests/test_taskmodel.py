@@ -28,8 +28,12 @@ class TestTaskModel:
         row.notes = ['Note 1', 'Note 2']
         row.created_on = datetime(2024, 1, 1, 12, 0, 0)
         row.deleted = False
+        row.priority = 0
+        row.size = 'U'
         row.update_record = Mock()
         row.delete_record = Mock()
+        # Make .get() method work
+        row.get = lambda k, d=None: getattr(row, k, d)
         return row
 
     @pytest.fixture
@@ -228,8 +232,12 @@ class TestTaskEdgeCases:
         row.notes = None
         row.created_on = datetime.now()
         row.deleted = False
+        row.priority = 0
+        row.size = 'U'
         row.update_record = Mock()
         row.delete_record = Mock()
+        # Make .get() method work
+        row.get = lambda k, d=None: getattr(row, k, d)
         return row
 
     def test_task_with_none_values(self, mock_db, mock_row_with_none):
@@ -251,7 +259,10 @@ class TestTaskEdgeCases:
         row.notes = []
         row.created_on = datetime.now()
         row.deleted = False
+        row.priority = 0
+        row.size = 'U'
         row.update_record = Mock()
+        row.get = lambda k, d=None: getattr(row, k, d)
 
         task = Task.from_row(mock_db, row)
         assert task.notes == []
@@ -267,7 +278,10 @@ class TestTaskEdgeCases:
         row.notes = []
         row.created_on = datetime.now()
         row.deleted = False
+        row.priority = 0
+        row.size = 'U'
         row.update_record = Mock()
+        row.get = lambda k, d=None: getattr(row, k, d)
 
         task = Task.from_row(mock_db, row)
         task.update_reminder(None)

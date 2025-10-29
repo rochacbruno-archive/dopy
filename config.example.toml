@@ -1,0 +1,82 @@
+# DoList Configuration File Example
+# Copy this file to ~/.config/dolist/config.toml and customize as needed
+# This file uses TOML format
+
+[database]
+# Database directory (default: ~/.config/dolist or $XDG_CONFIG_HOME/dolist)
+dir = "~/.config/dolist"
+
+# Database URI (default: sqlite://tasks.db)
+# You can specify different database files here
+uri = "sqlite://tasks.db"
+
+# Example: Use a different database file
+# uri = "sqlite://work-tasks.db"
+
+[ui]
+# TUI theme (default: textual-dark)
+# Available themes:
+#   - textual-dark (default dark theme)
+#   - textual-light (light theme)
+#   - nord (Nord color scheme)
+#   - gruvbox (Gruvbox theme)
+#   - catppuccin (Catppuccin theme)
+#   - dracula (Dracula theme)
+#   - monokai (Monokai theme)
+#   - solarized-light (Solarized light)
+#   - solarized-dark (Solarized dark)
+theme = "textual-dark"
+
+# Columns to display in tables (both TUI and CLI)
+# The 'id' column is always required and must be first
+# Available columns: id, name, tag, status, reminder, notes, created, priority, size
+# Default: all columns with priority and size at the end
+columns = ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+
+# Example: Show only essential columns
+# columns = ["id", "name", "priority", "size"]
+
+# Example: Prioritize priority and size columns
+# columns = ["id", "priority", "size", "name", "tag", "status"]
+
+# Example: Minimal view for focus
+# columns = ["id", "name", "status", "priority"]
+
+[tui]
+# Auto-refresh interval in seconds (default: 30)
+# Set to 0 to disable auto-refresh
+# This controls how often the TUI automatically refreshes the task list
+autorefresh_interval = 30
+
+# Example: Disable auto-refresh
+# autorefresh_interval = 0
+
+# Example: Refresh every minute
+# autorefresh_interval = 60
+
+[reminders]
+# Custom command to handle reminders (optional)
+# If set, this command will be called with task JSON piped to stdin
+# If not set, uses notify-send by default on Linux systems
+#
+# The command receives JSON data like:
+# {
+#   "id": 1,
+#   "name": "Task name",
+#   "tag": "work",
+#   "status": "new",
+#   "reminder": "2 hours",
+#   "notes": ["note 1", "note 2"]
+# }
+#
+# Example: Use a custom notification script
+# reminder_cmd = "/home/user/bin/custom-reminder.sh"
+
+# Example: Use macOS notification center
+# reminder_cmd = "osascript -e 'display notification \"REMINDER\" with title \"DoList\"'"
+
+# Example: Send to a webhook
+# reminder_cmd = "curl -X POST -H 'Content-Type: application/json' -d @- https://example.com/webhook"
+
+# Multiple database support for reminder service (future feature)
+# databases = ["tasks.db", "work.db", "personal.db"]

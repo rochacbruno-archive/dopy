@@ -23,9 +23,12 @@ optionally use your Dropbox to store the database
 - **Interactive TUI Mode** with [Textual](https://github.com/Textualize/textual) for graphical terminal interface
 - **Enhanced Python REPL** with [ptpython](https://github.com/prompt-toolkit/ptpython) featuring syntax highlighting and auto-completion
 - **Data Validation** with [Pydantic](https://github.com/pydantic/pydantic) models
-- **SQLite Database** for local task storage
+- **SQLite Database** for local task storage with automatic migrations
 - **Tag Support** to organize tasks
+- **Priority & Size Fields** to organize and categorize tasks
+- **Configurable Columns** - customize which columns to display and their order
 - **Notes** on tasks with stdin support for piping content
+- **Task History** tracking all changes to tasks over time
 - **Smart Reminders** with flexible natural language parsing and background service
 - **Desktop Notifications** for due reminders (with custom handler support)
 - **Systemd Integration** for automatic reminder service
@@ -100,6 +103,84 @@ dolist --help
 uv pip install -e .
 dolist --help
 ```
+
+## Configuration
+
+DoList can be configured via a TOML configuration file located at:
+- `~/.config/dolist/config.toml` (Linux/Unix)
+- `$XDG_CONFIG_HOME/dolist/config.toml` (if XDG_CONFIG_HOME is set)
+
+A default configuration file is automatically created on first run. You can also copy the example configuration:
+
+```bash
+cp config.example.toml ~/.config/dolist/config.toml
+```
+
+### Configuration Options
+
+#### Database Settings
+
+```toml
+[database]
+# Database directory
+dir = "~/.config/dolist"
+
+# Database URI
+uri = "sqlite://tasks.db"
+```
+
+#### UI Settings
+
+```toml
+[ui]
+# TUI theme (default: textual-dark)
+# Available: textual-dark, textual-light, nord, gruvbox, catppuccin,
+#            dracula, monokai, solarized-light, solarized-dark
+theme = "textual-dark"
+
+# Columns to display in tables (both TUI and CLI)
+# The 'id' column is always required and must be first
+# Available columns: id, name, tag, status, reminder, notes, created, priority, size
+columns = ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+```
+
+**Column Configuration Examples:**
+
+Show only essential columns:
+```toml
+columns = ["id", "name", "priority", "size"]
+```
+
+Prioritize priority and size:
+```toml
+columns = ["id", "priority", "size", "name", "tag", "status"]
+```
+
+Minimal view for focus:
+```toml
+columns = ["id", "name", "status", "priority"]
+```
+
+#### TUI Settings
+
+```toml
+[tui]
+# Auto-refresh interval in seconds (default: 30)
+# Set to 0 to disable auto-refresh
+autorefresh_interval = 30
+```
+
+#### Reminder Settings
+
+```toml
+[reminders]
+# Custom command to handle reminders (optional)
+# If not set, uses notify-send by default
+# The command receives task JSON via stdin
+# reminder_cmd = "/path/to/custom/reminder/handler"
+```
+
+For more examples, see `config.example.toml` in the repository.
 
 ## Usage
 
@@ -262,12 +343,22 @@ The search overlay (`/`) supports powerful filtering:
 | `tag=a,b` | `/tag=work,home` | Filter by multiple tags (OR logic) |
 | `status=value` | `/status=new` | Filter by single status |
 | `status=a,b` | `/status=new,done` | Filter by multiple statuses |
+| `priority=N` | `/priority=5` | Filter by exact priority |
+| `priority=>N` | `/priority=>5` | Filter by priority greater than N |
+| `priority=>=N` | `/priority=>=3` | Filter by priority greater than or equal to N |
+| `priority=<N` | `/priority=<2` | Filter by priority less than N |
+| `priority=<=N` | `/priority=<=5` | Filter by priority less than or equal to N |
+| `size=value` | `/size=M` | Filter by single size (U, S, M, L) |
+| `size=a,b` | `/size=S,M` | Filter by multiple sizes |
 | Combined | `/tag=work urgent` | Combine filters (tag=work AND text contains "urgent") |
 
 **Examples:**
 - `/bug` - Find all tasks with "bug" in the name
 - `/tag=urgent` - Show only tasks tagged "urgent"
 - `/status=new,in-progress` - Show new or in-progress tasks
+- `/priority=>5` - Show high priority tasks (priority > 5)
+- `/size=M` - Show medium-sized tasks
+- `/tag=work priority=>=3` - Show work tasks with priority 3 or higher
 - `/tag=work test` - Show work tasks containing "test"
 
 #### Command Palette
@@ -418,6 +509,22 @@ Filter by status:
 
 ```bash
 dolist ls --status done
+```
+
+Filter by priority:
+
+```bash
+dolist ls --priority 5           # Exact match
+dolist ls --priority '>5'        # Greater than 5
+dolist ls --priority '>=3'       # Greater than or equal to 3
+dolist ls --priority '<2'        # Less than 2
+```
+
+Filter by size:
+
+```bash
+dolist ls --size M               # Medium sized tasks
+dolist ls --size S               # Small sized tasks
 ```
 
 List all tasks (including done/cancelled):

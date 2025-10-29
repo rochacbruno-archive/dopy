@@ -32,6 +32,11 @@ def parse_search(search_text: str) -> dict:
         /tag=work → {'tag': ['work']}
         /tag=work,personal → {'tag': ['work', 'personal']}
         /status=new,done → {'status': ['new', 'done']}
+        /priority=5 → {'priority': '5'}
+        /priority=>5 → {'priority': '>5'}
+        /priority=>=3 → {'priority': '>=3'}
+        /size=M → {'size': 'M'}
+        /size=S,M → {'size': ['S', 'M']}
         /tag=work test → {'tag': ['work'], 'text': 'test'}
         /status=new tag=urgent bug → {'status': ['new'], 'tag': ['urgent'], 'text': 'bug'}
     """
@@ -47,6 +52,16 @@ def parse_search(search_text: str) -> dict:
                 filters['tag'] = value.split(',')
             elif key == 'status':
                 filters['status'] = value.split(',')
+            elif key == 'priority':
+                # Store priority as-is to support range operators (>, >=, <, <=)
+                filters['priority'] = value
+            elif key == 'size':
+                # Support multiple sizes separated by comma
+                sizes = value.split(',')
+                if len(sizes) == 1:
+                    filters['size'] = sizes[0]
+                else:
+                    filters['size'] = sizes
         else:
             remaining_text.append(part)
 
@@ -267,6 +282,21 @@ class AddTaskScreen(ModalScreen):
             )
             yield Label("Reminder:")
             yield Input(placeholder="e.g., 2h, 30min, tomorrow, next week", id="reminder_input")
+            yield Label("Priority:")
+            yield Input(placeholder="Priority (number, default: 0)", id="priority_input")
+            yield Label("Size:")
+            yield Select(
+                [
+                    ("Undefined", "U"),
+                    ("Small", "S"),
+                    ("Medium", "M"),
+                    ("Large", "L"),
+                ],
+                value="U",
+                allow_blank=False,
+                prompt="Select size",
+                id="size_select",
+            )
             yield Label("Notes:")
             yield TextArea("", id="notes_textarea")
             with Horizontal():
@@ -281,6 +311,8 @@ class AddTaskScreen(ModalScreen):
             tag_input = self.query_one("#tag_input", Input)
             status_select = self.query_one("#status_select", Select)
             reminder_input = self.query_one("#reminder_input", Input)
+            priority_input = self.query_one("#priority_input", Input)
+            size_select = self.query_one("#size_select", Select)
             notes_textarea = self.query_one("#notes_textarea", TextArea)
 
             name = name_input.value.strip()
@@ -292,6 +324,16 @@ class AddTaskScreen(ModalScreen):
             reminder = reminder_input.value.strip() or None
             notes_text = notes_textarea.text
             notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
+
+            # Parse priority
+            try:
+                priority = int(priority_input.value.strip() or "0")
+            except ValueError:
+                self.app.notify(f"Invalid priority: must be a number", severity="error")
+                return
+
+            # Get size
+            size = size_select.value or "U"
 
             # Parse and validate reminder
             reminder_timestamp = None
@@ -313,6 +355,8 @@ class AddTaskScreen(ModalScreen):
                 reminder_timestamp=reminder_timestamp,
                 notes=notes,
                 created_on=created_on,
+                priority=priority,
+                size=size,
             )
             self.db.commit()
 
@@ -390,6 +434,25 @@ class EditTaskScreen(ModalScreen):
                 placeholder="e.g., 2h, 30min, tomorrow, next week",
                 id="reminder_input",
             )
+            yield Label("Priority:")
+            yield Input(
+                value=str(self.task_row.get('priority', 0)),
+                placeholder="Priority (number, default: 0)",
+                id="priority_input",
+            )
+            yield Label("Size:")
+            yield Select(
+                [
+                    ("Undefined", "U"),
+                    ("Small", "S"),
+                    ("Medium", "M"),
+                    ("Large", "L"),
+                ],
+                value=self.task_row.get('size', 'U'),
+                allow_blank=False,
+                prompt="Select size",
+                id="size_select",
+            )
             yield Label("Notes:")
             notes_text = "\n".join(self.task_row.notes or [])
             yield TextArea(notes_text, id="notes_textarea")
@@ -445,6 +508,8 @@ class EditTaskScreen(ModalScreen):
             tag_input = self.query_one("#tag_input", Input)
             status_select = self.query_one("#status_select", Select)
             reminder_input = self.query_one("#reminder_input", Input)
+            priority_input = self.query_one("#priority_input", Input)
+            size_select = self.query_one("#size_select", Select)
             notes_textarea = self.query_one("#notes_textarea", TextArea)
 
             name = name_input.value.strip()
@@ -456,6 +521,16 @@ class EditTaskScreen(ModalScreen):
             reminder = reminder_input.value.strip() or None
             notes_text = notes_textarea.text
             notes = [n.strip() for n in notes_text.split("\n") if n.strip()]
+
+            # Parse priority
+            try:
+                priority = int(priority_input.value.strip() or "0")
+            except ValueError:
+                self.app.notify(f"Invalid priority: must be a number", severity="error")
+                return
+
+            # Get size
+            size = size_select.value or "U"
 
             # Parse and validate reminder only if it changed
             reminder_timestamp = self.task_row.reminder_timestamp
@@ -478,6 +553,8 @@ class EditTaskScreen(ModalScreen):
                 reminder=reminder,
                 reminder_timestamp=reminder_timestamp,
                 notes=notes,
+                priority=priority,
+                size=size,
             )
             self.db.commit()
 
@@ -547,10 +624,10 @@ class TaskHistoryScreen(ModalScreen):
     def on_mount(self) -> None:
         """Populate the history table when screen mounts."""
         table = self.query_one("#history_table", DataTable)
-        table.add_columns("Changed At", "Name", "Tag", "Status", "Reminder", "Notes")
+        table.add_columns("Changed At", "Name", "Tag", "Status", "Priority", "Size", "Reminder", "Notes")
 
         if self.history_table is None:
-            table.add_row("No history available", "", "", "", "", "")
+            table.add_row("No history available", "", "", "", "", "", "", "")
             return
 
         # Query history for this task
@@ -562,7 +639,7 @@ class TaskHistoryScreen(ModalScreen):
             rows = sorted(rows, key=lambda r: r.changed_at, reverse=True)
 
             if not rows:
-                table.add_row("No history recorded yet", "", "", "", "", "")
+                table.add_row("No history recorded yet", "", "", "", "", "", "", "")
                 return
 
             for row in rows:
@@ -582,6 +659,10 @@ class TaskHistoryScreen(ModalScreen):
                 elif row.status == "post":
                     status_text = f"[magenta]{row.status}[/magenta]"
 
+                # Get priority and size
+                priority = row.get('priority', 0)
+                size = row.get('size', 'U')
+
                 # Format reminder
                 reminder_text = row.reminder or ""
 
@@ -593,11 +674,13 @@ class TaskHistoryScreen(ModalScreen):
                     row.name or "",
                     row.tag or "",
                     status_text,
+                    str(priority),
+                    size,
                     reminder_text,
                     str(notes_count),
                 )
         except Exception as e:
-            table.add_row(f"Error loading history: {e}", "", "", "", "", "")
+            table.add_row(f"Error loading history: {e}", "", "", "", "", "", "", "")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close_btn":
@@ -878,8 +961,8 @@ class DoListTUI(App):
         self.search_filter = {}  # Dict with 'tag', 'status', 'text' keys
 
         # Task 7: State for sorting and scroll preservation
-        self.sort_column = None  # e.g., 'name', 'created', 'status'
-        self.sort_direction = 'asc'  # 'asc' or 'desc'
+        self.sort_column = 'priority'  # Default sort by priority (as per requirements)
+        self.sort_direction = 'desc'  # 'asc' or 'desc' - desc for priority to show high priority first
         self.last_scroll_y = 0
         self.last_selected_task_id = None
 
@@ -977,6 +1060,16 @@ class DoListTUI(App):
                 statuses = ', '.join(self.search_filter['status'])
                 filter_parts.append(f"status: {statuses}")
 
+            if 'priority' in self.search_filter and self.search_filter['priority']:
+                filter_parts.append(f"priority: {self.search_filter['priority']}")
+
+            if 'size' in self.search_filter and self.search_filter['size']:
+                if isinstance(self.search_filter['size'], list):
+                    sizes = ', '.join(self.search_filter['size'])
+                    filter_parts.append(f"size: {sizes}")
+                else:
+                    filter_parts.append(f"size: {self.search_filter['size']}")
+
             if filter_parts:
                 filter_desc = ' | '.join(filter_parts)
                 search_status.update(f"[bold cyan]{result_count} results for /{filter_desc}[/bold cyan]")
@@ -994,7 +1087,29 @@ class DoListTUI(App):
 
         table = self.query_one("#tasks_table", DataTable)
         # Task 5: Add columns (they are clickable by default in Textual)
-        table.add_columns("ID", "Name", "Tag", "Status", "Reminder", "Notes", "Created")
+        # Get columns from config with default fallback
+        columns_config = self.config.get('columns', ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"])
+
+        # Map column names to display names
+        column_display_map = {
+            'id': 'ID',
+            'name': 'Name',
+            'tag': 'Tag',
+            'status': 'Status',
+            'reminder': 'Reminder',
+            'notes': 'Notes',
+            'created': 'Created',
+            'priority': 'Priority',
+            'size': 'Size'
+        }
+
+        # Add columns based on configuration
+        display_columns = [column_display_map.get(col, col.title()) for col in columns_config]
+        table.add_columns(*display_columns)
+
+        # Store column configuration for row building
+        self.columns_config = columns_config
+
         self.refresh_tasks()
 
         # Focus the table by default (Task 1 requirement)
@@ -1098,6 +1213,13 @@ class DoListTUI(App):
             return sorted(rows_list, key=lambda r: r.tag.lower(), reverse=reverse)
         elif self.sort_column == 'id':
             return sorted(rows_list, key=lambda r: r.id, reverse=reverse)
+        elif self.sort_column == 'priority':
+            # Sort by priority first, then by created_on as secondary sort (newest first)
+            return sorted(rows_list, key=lambda r: (r.get('priority', 0), r.created_on), reverse=reverse)
+        elif self.sort_column == 'size':
+            # Sort by size with order: U, S, M, L
+            size_order = {'U': 0, 'S': 1, 'M': 2, 'L': 3}
+            return sorted(rows_list, key=lambda r: size_order.get(r.get('size', 'U'), 0), reverse=reverse)
 
         return rows_list
 
@@ -1163,6 +1285,94 @@ class DoListTUI(App):
         # Get rows
         rows = self.db(query).select()
 
+        # Apply priority filter (post-query filtering to support range operators)
+        if 'priority' in self.search_filter and self.search_filter['priority']:
+            priority_filter = self.search_filter['priority']
+            filtered_rows = []
+            for row in rows:
+                task_priority = row.get('priority', 0)
+                include = False
+
+                # Check for range operators
+                if priority_filter.startswith('>='):
+                    try:
+                        val = int(priority_filter[2:])
+                        include = task_priority >= val
+                    except ValueError:
+                        pass
+                elif priority_filter.startswith('>'):
+                    try:
+                        val = int(priority_filter[1:])
+                        include = task_priority > val
+                    except ValueError:
+                        pass
+                elif priority_filter.startswith('<='):
+                    try:
+                        val = int(priority_filter[2:])
+                        include = task_priority <= val
+                    except ValueError:
+                        pass
+                elif priority_filter.startswith('<'):
+                    try:
+                        val = int(priority_filter[1:])
+                        include = task_priority < val
+                    except ValueError:
+                        pass
+                elif priority_filter.startswith('='):
+                    try:
+                        val = int(priority_filter[1:])
+                        include = task_priority == val
+                    except ValueError:
+                        pass
+                else:
+                    # Exact match
+                    try:
+                        val = int(priority_filter)
+                        include = task_priority == val
+                    except ValueError:
+                        pass
+
+                if include:
+                    filtered_rows.append(row)
+
+            rows = filtered_rows
+
+        # Apply size filter (post-query filtering)
+        if 'size' in self.search_filter and self.search_filter['size']:
+            size_filter = self.search_filter['size']
+            filtered_rows = []
+
+            # Handle multiple sizes (list) or single size (string)
+            if isinstance(size_filter, list):
+                # Normalize sizes
+                normalized_sizes = []
+                for s in size_filter:
+                    s_upper = s.upper()
+                    if s_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
+                        size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+                        normalized_sizes.append(size_map[s_upper])
+                    elif s_upper in ('U', 'S', 'M', 'L'):
+                        normalized_sizes.append(s_upper)
+
+                for row in rows:
+                    task_size = row.get('size', 'U')
+                    if task_size in normalized_sizes:
+                        filtered_rows.append(row)
+            else:
+                # Single size
+                size_upper = size_filter.upper()
+                if size_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
+                    size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+                    size_upper = size_map[size_upper]
+
+                if size_upper in ('U', 'S', 'M', 'L'):
+                    for row in rows:
+                        task_size = row.get('size', 'U')
+                        if task_size == size_upper:
+                            filtered_rows.append(row)
+
+            rows = filtered_rows
+
         # Task 7: Apply current sort
         rows = self.apply_sort(rows)
 
@@ -1200,19 +1410,26 @@ class DoListTUI(App):
                     # Show time until reminder
                     reminder_display = get_time_until(row.reminder_timestamp)
 
-            # Format ID with selection indicator
-            id_display = str(row.id)
+            # Build row data based on column configuration
+            row_data = {}
+            row_data['id'] = str(row.id)
             if row.id in self.selected_task_ids:
-                id_display = f"[bold cyan]✓ {row.id}[/bold cyan]"
+                row_data['id'] = f"[bold cyan]✓ {row.id}[/bold cyan]"
+
+            row_data['priority'] = str(row.get('priority', 0))
+            row_data['size'] = row.get('size', 'U')
+            row_data['name'] = row.name
+            row_data['tag'] = row.tag
+            row_data['status'] = status_text
+            row_data['reminder'] = reminder_display
+            row_data['notes'] = str(len(row.notes) if row.notes else 0)
+            row_data['created'] = row.created_on.strftime("%d/%m-%H:%M")
+
+            # Build row in configured column order
+            ordered_row = [row_data.get(col, '') for col in self.columns_config]
 
             table.add_row(
-                id_display,
-                row.name,
-                row.tag,
-                status_text,
-                reminder_display,
-                str(len(row.notes) if row.notes else 0),
-                row.created_on.strftime("%d/%m-%H:%M"),
+                *ordered_row,
                 key=str(row.id),
             )
 
@@ -1484,6 +1701,8 @@ class DoListTUI(App):
                 FieldDef("notes", "list:string"),
                 FieldDef("created_on", "datetime"),
                 FieldDef("deleted", "boolean", default=False),
+                FieldDef("priority", "integer", default=0),
+                FieldDef("size", "string", default="U"),
             )
 
             # Also initialize history table
@@ -1498,6 +1717,8 @@ class DoListTUI(App):
                 FieldDef("notes", "list:string"),
                 FieldDef("created_on", "datetime"),
                 FieldDef("deleted", "boolean", default=False),
+                FieldDef("priority", "integer", default=0),
+                FieldDef("size", "string", default="U"),
             )
 
             # Switch to new database
@@ -1720,6 +1941,10 @@ class DoListTUI(App):
             "Tag": "tag",
             "Status": "status",
             "Created": "created",
+            "Priority": "priority",
+            "Size": "size",
+            "Reminder": "reminder",
+            "Notes": "notes",
         }
 
         # Get the column label from the event - use .label which is a Rich Text object

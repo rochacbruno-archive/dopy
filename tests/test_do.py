@@ -132,7 +132,9 @@ class TestAddCommand:
             reminder=None,
             reminder_timestamp=None,
             notes=None,
-            created_on=mock_now
+            created_on=mock_now,
+            priority=0,
+            size='U'
         )
 
         # Should commit

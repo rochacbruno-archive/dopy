@@ -104,16 +104,35 @@ elif CONFIGFILE.exists():
             raise ImportError("TOML library not available")
         with open(CONFIGFILE, 'rb') as f:
             toml_config = tomllib.load(f)
+
+        # Default columns with priority and size at the end
+        default_columns = ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+        columns = toml_config.get('ui', {}).get('columns', default_columns)
+
+        # Ensure 'id' is always first
+        if 'id' not in columns:
+            columns = ['id'] + columns
+        elif columns[0] != 'id':
+            columns.remove('id')
+            columns = ['id'] + columns
+
         CONFIG = {
             'dbdir': toml_config.get('database', {}).get('dir', str(BASEDIR)),
             'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db'),
             'theme': toml_config.get('ui', {}).get('theme', 'textual-dark'),
             'autorefresh_interval': toml_config.get('tui', {}).get('autorefresh_interval', 30),
-            'reminder_cmd': toml_config.get('reminders', {}).get('reminder_cmd')
+            'reminder_cmd': toml_config.get('reminders', {}).get('reminder_cmd'),
+            'columns': columns
         }
     except Exception as e:
         print(f"Warning: Could not load config file: {e}")
-        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark', 'autorefresh_interval': 30}
+        CONFIG = {
+            'dbdir': str(BASEDIR),
+            'dburi': 'sqlite://tasks.db',
+            'theme': 'textual-dark',
+            'autorefresh_interval': 30,
+            'columns': ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+        }
 else:
     # Create default TOML config
     default_config = f'''# DoList Configuration File
@@ -130,6 +149,12 @@ uri = "sqlite://tasks.db"
 # Available themes: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, monokai, solarized-light, solarized-dark
 theme = "textual-dark"
 
+# Columns to display in tables (TUI and CLI)
+# The 'id' column is always required and must be first
+# Available columns: id, name, tag, status, reminder, notes, created, priority, size
+# Default order: all columns with priority and size at the end
+columns = ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+
 [tui]
 # Auto-refresh interval in seconds (default: 30)
 # Set to 0 to disable auto-refresh
@@ -142,7 +167,13 @@ autorefresh_interval = 30
 # reminder_cmd = "/path/to/custom/reminder/handler"
 '''
     CONFIGFILE.write_text(default_config)
-    CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark', 'autorefresh_interval': 30}
+    CONFIG = {
+        'dbdir': str(BASEDIR),
+        'dburi': 'sqlite://tasks.db',
+        'theme': 'textual-dark',
+        'autorefresh_interval': 30,
+        'columns': ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+    }
 
 # Support legacy database location (~/.dopy/dopy.db)
 legacy_db_path = Path.home() / '.dopy' / 'dopy.db'
@@ -209,6 +240,8 @@ def database(DBURI):
         FieldDef("notes", "list:string"),
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
+        FieldDef("priority", "integer", default=0),
+        FieldDef("size", "string", default="U"),
     )
 
     # TaskHistory table for tracking changes
@@ -223,6 +256,8 @@ def database(DBURI):
         FieldDef("notes", "list:string"),
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
+        FieldDef("priority", "integer", default=0),
+        FieldDef("size", "string", default="U"),
     )
 
     return _db, tasks, history
@@ -265,6 +300,8 @@ def record_task_history(task_row):
             notes=task_row.notes,
             created_on=task_row.created_on,
             deleted=task_row.deleted,
+            priority=task_row.get('priority', 0),
+            size=task_row.get('size', 'U'),
         )
         db.commit()
     except Exception as e:
@@ -668,6 +705,8 @@ def add(
     status: str = "new",
     reminder: Optional[str] = None,
     note: Optional[str] = None,
+    priority: int = 0,
+    size: str = "U",
     use: Optional[str] = None,
 ):
     """Add a new task.
@@ -678,6 +717,8 @@ def add(
         status: Task status (default: "new").
         reminder: Optional reminder text (e.g., "today", "2 hours", "next week").
         note: Optional note to add to the task.
+        priority: Task priority (default: 0).
+        size: Task size - U/S/M/L or Undefined/Small/Medium/Large (default: "U").
         use: Database name to use (optional).
     """
     init_db(use)
@@ -725,6 +766,17 @@ def add(
             reminder_timestamp = parsed_dt
             rprint(f"[cyan]Reminder set for: {format_reminder(parsed_dt)}[/cyan]")
 
+    # Normalize size value
+    size_upper = size.upper()
+    if size_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
+        size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+        size = size_map[size_upper]
+    elif size_upper not in ('U', 'S', 'M', 'L'):
+        rprint(f"[yellow]Warning: Invalid size '{size}', using 'U' (Undefined)[/yellow]")
+        size = 'U'
+    else:
+        size = size_upper
+
     task_id = tasks.insert(
         name=name,
         tag=tag or 'default',
@@ -732,7 +784,9 @@ def add(
         reminder=reminder,
         reminder_timestamp=reminder_timestamp,
         notes=notes if notes else None,
-        created_on=created_on
+        created_on=created_on,
+        priority=priority,
+        size=size
     )
     db.commit()
     rprint(f"[green]Task {task_id} inserted[/green]")
@@ -750,6 +804,8 @@ def ls(
     month: Optional[str] = None,
     day: Optional[str] = None,
     year: Optional[str] = None,
+    priority: Optional[str] = None,
+    size: Optional[str] = None,
     json: bool = False,
     action: Optional[str] = None,
     action_args: Optional[str] = None,
@@ -767,6 +823,8 @@ def ls(
         month: Filter by month.
         day: Filter by day.
         year: Filter by year.
+        priority: Filter by priority (exact match or range like '>5', '>=3', '<2').
+        size: Filter by size (U, S, M, L).
         json: Output in JSON format.
         action: Bulk action to perform on all matching tasks (done, start, cancel, new, post, delete, rm, remind).
         action_args: Arguments for the bulk action (e.g., reminder time).
@@ -786,6 +844,83 @@ def ls(
         query &= tasks.name.like('%%%s%%' % search.lower())
 
     rows = db(query).select()
+
+    # Apply priority filter (post-query filtering to support range operators)
+    if priority:
+        filtered_rows = []
+        for row in rows:
+            task_priority = row.get('priority', 0)
+            include = False
+
+            # Check for range operators
+            if priority.startswith('>='):
+                try:
+                    val = int(priority[2:])
+                    include = task_priority >= val
+                except ValueError:
+                    console.print(f"[red]Invalid priority value: {priority}[/red]")
+                    return
+            elif priority.startswith('>'):
+                try:
+                    val = int(priority[1:])
+                    include = task_priority > val
+                except ValueError:
+                    console.print(f"[red]Invalid priority value: {priority}[/red]")
+                    return
+            elif priority.startswith('<='):
+                try:
+                    val = int(priority[2:])
+                    include = task_priority <= val
+                except ValueError:
+                    console.print(f"[red]Invalid priority value: {priority}[/red]")
+                    return
+            elif priority.startswith('<'):
+                try:
+                    val = int(priority[1:])
+                    include = task_priority < val
+                except ValueError:
+                    console.print(f"[red]Invalid priority value: {priority}[/red]")
+                    return
+            elif priority.startswith('='):
+                try:
+                    val = int(priority[1:])
+                    include = task_priority == val
+                except ValueError:
+                    console.print(f"[red]Invalid priority value: {priority}[/red]")
+                    return
+            else:
+                # Exact match
+                try:
+                    val = int(priority)
+                    include = task_priority == val
+                except ValueError:
+                    console.print(f"[red]Invalid priority value: {priority}[/red]")
+                    return
+
+            if include:
+                filtered_rows.append(row)
+
+        rows = filtered_rows
+
+    # Apply size filter (post-query filtering)
+    if size:
+        # Normalize size input
+        size_upper = size.upper()
+        if size_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
+            size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+            size_upper = size_map[size_upper]
+
+        if size_upper not in ('U', 'S', 'M', 'L'):
+            console.print(f"[red]Invalid size: {size}. Use U, S, M, L (or Undefined, Small, Medium, Large)[/red]")
+            return
+
+        filtered_rows = []
+        for row in rows:
+            task_size = row.get('size', 'U')
+            if task_size == size_upper:
+                filtered_rows.append(row)
+
+        rows = filtered_rows
 
     # Apply date filters (post-query filtering)
     if date or month or day or year:
@@ -926,7 +1061,24 @@ def ls(
         return
 
     # Handle table output
-    headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Notes','Created']]
+    # Get columns from config with default fallback
+    columns_config = CONFIG.get('columns', ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"])
+
+    # Map column names to display names and formatting functions
+    column_display_map = {
+        'id': ('ID', lambda r: ID(str(r.id))),
+        'name': ('Name', lambda r: NAME(str(r.name))),
+        'tag': ('Tag', lambda r: TAG(str(r.tag))),
+        'status': ('Status', lambda r: STATUS(str(r.status))),
+        'reminder': ('Reminder', lambda r: r.get('_reminder_display', '')),
+        'notes': ('Notes', lambda r: str(len(r.notes) if r.notes else 0)),
+        'created': ('Created', lambda r: str(r.created_on.strftime("%d/%m-%H:%M"))),
+        'priority': ('Priority', lambda r: str(r.get('priority', 0))),
+        'size': ('Size', lambda r: str(r.get('size', 'U'))),
+    }
+
+    # Build headers based on configuration
+    headers = [HEAD(column_display_map[col][0]) for col in columns_config if col in column_display_map]
     table = [headers]
 
     now = datetime.datetime.now()
@@ -944,15 +1096,11 @@ def ls(
                 # Show time until reminder
                 reminder_display = get_time_until(row.reminder_timestamp)
 
-        fields = [
-            ID(str(row.id)),
-            NAME(str(row.name)),
-            TAG(str(row.tag)),
-            STATUS(str(row.status)),
-            reminder_display,
-            str(len(row.notes) if row.notes else 0),
-            str(row.created_on.strftime("%d/%m-%H:%M"))
-        ]
+        # Store reminder display for use in lambda
+        row._reminder_display = reminder_display
+
+        # Build row based on configured columns
+        fields = [column_display_map[col][1](row) for col in columns_config if col in column_display_map]
         table.append(fields)
 
     print_table(table)

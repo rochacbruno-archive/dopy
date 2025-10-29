@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 class Task(BaseModel):
     """To show the task
 >>> print task
-To show a field (available name, tag, status, reminder)
+To show a field (available name, tag, status, reminder, priority, size)
 >>> task.name
 To edit the task assign to a field
 >>> task.name = "Other name"
@@ -27,6 +27,8 @@ To exit
     notes: list[str] = Field(default_factory=list)
     created_on: datetime = Field(default_factory=datetime.now)
     deleted: bool = False
+    priority: int = 0
+    size: str = "U"
 
     # Database connection for persistence (not part of the model data)
     _db: Optional[object] = None
@@ -46,6 +48,29 @@ To exit
             raise ValueError(f"Status must be one of {valid_statuses}")
         return v
 
+    @field_validator('size')
+    @classmethod
+    def validate_size(cls, v: str) -> str:
+        """Validate and normalize size field."""
+        if not v:
+            return "U"
+        # Normalize to uppercase first letter
+        v_upper = v.upper()
+        if v_upper in ('U', 'S', 'M', 'L'):
+            return v_upper
+        # Handle full words (case insensitive)
+        size_map = {
+            'SMALL': 'S',
+            'MEDIUM': 'M',
+            'LARGE': 'L',
+            'UNDEFINED': 'U'
+        }
+        normalized = size_map.get(v_upper)
+        if normalized:
+            return normalized
+        raise ValueError(f"Size must be one of: U, S, M, L (or Small, Medium, Large, Undefined)")
+        return v
+
     @classmethod
     def from_row(cls, db, row) -> "Task":
         """Create a Task instance from a database row."""
@@ -58,6 +83,8 @@ To exit
             notes=row.notes or [],
             created_on=row.created_on,
             deleted=row.deleted,
+            priority=row.get('priority', 0),
+            size=row.get('size', 'U'),
         )
         task._db = db
         task._row = row
@@ -93,6 +120,17 @@ To exit
         """Update the task notes."""
         self.notes = value
         self._update_db(notes=value)
+
+    def update_priority(self, value: int):
+        """Update the task priority."""
+        self.priority = value
+        self._update_db(priority=value)
+
+    def update_size(self, value: str):
+        """Update the task size."""
+        # Validate and normalize the size value
+        self.size = self.validate_size(value)
+        self._update_db(size=self.size)
 
     def add_note(self, note: str):
         """Add a note to the task."""

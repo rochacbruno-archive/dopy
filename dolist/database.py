@@ -375,13 +375,14 @@ class Query:
 class Database:
     """Simple SQLite database wrapper."""
 
-    def __init__(self, uri, folder='.'):
+    def __init__(self, uri, folder='.', run_migrations=True):
         """
         Initialize database connection.
 
         Args:
             uri: Database URI like 'sqlite://dopy.db' or 'sqlite://:memory:'
             folder: Folder where database file is stored
+            run_migrations: If True, run database migrations on init
         """
         # Parse URI
         if uri.startswith('sqlite://'):
@@ -397,6 +398,11 @@ class Database:
 
         self.conn = sqlite3.connect(db_path)
         self.tables = {}
+
+        # Run migrations if requested and not in-memory database
+        if run_migrations and db_path != ':memory:':
+            from .migrations import run_migrations
+            run_migrations(self.conn)
 
     def define_table(self, name, *fields, **kwargs):
         """
