@@ -59,10 +59,18 @@ def parse_search(search_text: str) -> dict:
 class ConfirmDeleteScreen(ModalScreen):
     """Modal screen for confirming task deletion."""
 
+    BINDINGS = [
+        ("escape", "dismiss", "Cancel"),
+    ]
+
     def __init__(self, task_name: str, on_confirm):
         super().__init__()
         self.task_name = task_name
         self.on_confirm = on_confirm
+
+    def action_dismiss(self) -> None:
+        """Cancel and return to home screen."""
+        self.app.pop_screen()
 
     CSS = """
     ConfirmDeleteScreen {
@@ -573,6 +581,7 @@ class DoListTUI(App):
         Binding("ctrl+p", "filter_post", "", show=False),
         # Visible bindings in footer
         Binding("a", "add_task", "Add Task"),
+        Binding("d", "delete_task", "Delete"),
         Binding("e", "edit_task", "Edit"),
         Binding("enter", "edit_task", "Edit", show=False),
         Binding("s", "cycle_status", "Cycle Status"),
@@ -887,6 +896,29 @@ class DoListTUI(App):
             task_row = self._tasks_table[int(row_key)]
             if task_row:
                 self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
+
+    def action_delete_task(self) -> None:
+        """Delete the selected task with confirmation."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the selected task
+        row_key = table.get_row_at(table.cursor_row)[0]
+        task_row = self._tasks_table[int(row_key)]
+        if not task_row:
+            return
+
+        # Define the confirmation callback
+        def confirm_delete():
+            task_row.update_record(deleted=True)
+            self.db.commit()
+            self.notify(f"Task deleted: {task_row.name}", severity="information")
+            self.refresh_tasks()
+
+        # Show confirmation dialog
+        self.push_screen(ConfirmDeleteScreen(task_row.name, confirm_delete))
 
     def action_cycle_status(self) -> None:
         """Cycle the status of the selected task through: new -> in-progress -> done -> post -> cancel."""

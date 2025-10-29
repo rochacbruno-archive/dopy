@@ -1033,6 +1033,246 @@ def reset(
         console.print(f"[yellow]Backup is still available at: {backup_path}[/yellow]")
 
 
+def _parse_markdown_entry(file_path: Path) -> list[dict]:
+    """Parse a markdown file containing task entries.
+
+    Format:
+        # Task name
+
+        Optional multiline note before any list
+
+        - Note 1
+        - Note 2
+
+        > tag tag1,tag2
+        > status in-progress
+        > reminder 2 hours
+        > id 123
+
+    Returns:
+        List of task dictionaries with keys: name, tag, status, reminder, notes, id (optional)
+    """
+    content = file_path.read_text()
+    tasks = []
+    current_task = None
+    current_notes = []
+    pre_list_content = []
+    in_pre_list = True
+
+    for line in content.split('\n'):
+        line_stripped = line.strip()
+
+        # New task starts with #
+        if line_stripped.startswith('#'):
+            # Save previous task if exists
+            if current_task:
+                # Add pre-list content as first note if exists
+                if pre_list_content:
+                    pre_list_note = '\n'.join(pre_list_content).strip()
+                    if pre_list_note:
+                        current_notes.insert(0, pre_list_note)
+
+                current_task['notes'] = current_notes if current_notes else []
+                tasks.append(current_task)
+
+            # Start new task
+            task_name = line_stripped.lstrip('#').strip()
+            current_task = {
+                'name': task_name,
+                'tag': 'default',
+                'status': 'new',
+                'reminder': None,
+                'notes': []
+            }
+            current_notes = []
+            pre_list_content = []
+            in_pre_list = True
+
+        # Metadata lines start with >
+        elif line_stripped.startswith('>'):
+            metadata = line_stripped.lstrip('>').strip()
+
+            # Parse metadata
+            if metadata.startswith('tag '):
+                # Tags can be separated by commas or spaces
+                tag_text = metadata[4:].strip()
+                # Split by commas and spaces, take the first one
+                tags = [t.strip() for t in tag_text.replace(',', ' ').split() if t.strip()]
+                if tags and current_task:
+                    current_task['tag'] = tags[0]
+
+            elif metadata.startswith('status '):
+                status = metadata[7:].strip()
+                if current_task:
+                    current_task['status'] = status
+
+            elif metadata.startswith('reminder '):
+                reminder = metadata[9:].strip()
+                if current_task:
+                    current_task['reminder'] = reminder
+
+            elif metadata.startswith('id '):
+                task_id = metadata[3:].strip()
+                if current_task:
+                    try:
+                        current_task['id'] = int(task_id)
+                    except ValueError:
+                        pass
+
+        # List items become individual notes
+        elif line_stripped.startswith('-') or line_stripped.startswith('*'):
+            in_pre_list = False
+            note_text = line_stripped.lstrip('-*').strip()
+            if note_text:
+                current_notes.append(note_text)
+
+        # Continuation of list items (indented lines after a list item)
+        elif line.startswith('  ') and not in_pre_list and current_notes:
+            # Append to the last note
+            current_notes[-1] += '\n' + line_stripped
+
+        # Regular content before any list (becomes notes[0])
+        elif line_stripped and in_pre_list and current_task:
+            pre_list_content.append(line_stripped)
+
+    # Don't forget the last task
+    if current_task:
+        # Add pre-list content as first note if exists
+        if pre_list_content:
+            pre_list_note = '\n'.join(pre_list_content).strip()
+            if pre_list_note:
+                current_notes.insert(0, pre_list_note)
+
+        current_task['notes'] = current_notes if current_notes else []
+        tasks.append(current_task)
+
+    return tasks
+
+
+@app.command
+def import_tasks(
+    filename: str,
+    use: Optional[str] = None,
+):
+    """Import tasks from a markdown or JSON file.
+
+    Args:
+        filename: Path to the file to import (.md or .json).
+        use: Database name to use (optional).
+
+    Examples:
+        dolist import tasks.md        # Import from markdown
+        dolist import export.json     # Import from JSON
+    """
+    init_db(use)
+
+    file_path = Path(filename)
+
+    if not file_path.exists():
+        console.print(f"[red]File not found: {filename}[/red]")
+        return
+
+    tasks_data = []
+
+    # Parse based on file extension
+    if file_path.suffix == '.md':
+        console.print(f"[cyan]Parsing markdown file: {filename}[/cyan]")
+        tasks_data = _parse_markdown_entry(file_path)
+
+    elif file_path.suffix == '.json':
+        console.print(f"[cyan]Parsing JSON file: {filename}[/cyan]")
+        try:
+            import json as json_module
+            with open(file_path) as f:
+                tasks_data = json_module.load(f)
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Invalid JSON file: {e}[/red]")
+            return
+        except Exception as e:
+            console.print(f"[red]Error reading JSON file: {e}[/red]")
+            return
+
+    else:
+        console.print(f"[red]Unsupported file extension: {file_path.suffix}[/red]")
+        console.print("[yellow]Supported extensions: .md, .json[/yellow]")
+        return
+
+    if not tasks_data:
+        console.print("[yellow]No tasks found in file[/yellow]")
+        return
+
+    # Import tasks
+    created_count = 0
+    updated_count = 0
+
+    for task_data in tasks_data:
+        task_name = task_data.get('name')
+        if not task_name:
+            console.print("[yellow]Skipping task without name[/yellow]")
+            continue
+
+        # Check if this is an update (has 'id' field)
+        task_id = task_data.get('id')
+
+        if task_id:
+            # Update existing task (including soft-deleted ones)
+            result = db(tasks.id == task_id).select()
+            if result:
+                existing_task = result[0]
+                # Parse reminder if provided
+                reminder_timestamp = None
+                reminder_text = task_data.get('reminder')
+                if reminder_text:
+                    parsed_dt, error = parse_reminder(reminder_text)
+                    if not error:
+                        reminder_timestamp = parsed_dt
+
+                # Update task fields and undelete if necessary
+                existing_task.update_record(
+                    name=task_name,
+                    tag=task_data.get('tag', 'default'),
+                    status=task_data.get('status', 'new'),
+                    reminder=reminder_text,
+                    reminder_timestamp=reminder_timestamp,
+                    notes=task_data.get('notes', []),
+                    deleted=False  # Undelete the task when importing
+                )
+                db.commit()
+                console.print(f"[green]✓ Updated task {task_id}: {task_name}[/green]")
+                updated_count += 1
+            else:
+                console.print(f"[yellow]Task {task_id} not found, skipping[/yellow]")
+        else:
+            # Create new task
+            reminder_text = task_data.get('reminder')
+            reminder_timestamp = None
+            if reminder_text:
+                parsed_dt, error = parse_reminder(reminder_text)
+                if not error:
+                    reminder_timestamp = parsed_dt
+
+            new_task_id = tasks.insert(
+                name=task_name,
+                tag=task_data.get('tag', 'default'),
+                status=task_data.get('status', 'new'),
+                reminder=reminder_text,
+                reminder_timestamp=reminder_timestamp,
+                notes=task_data.get('notes', []),
+                created_on=datetime.datetime.now()
+            )
+            db.commit()
+            console.print(f"[green]✓ Created task {new_task_id}: {task_name}[/green]")
+            created_count += 1
+
+    # Summary
+    console.print(f"\n[bold cyan]Import Summary:[/bold cyan]")
+    if created_count > 0:
+        console.print(f"  [green]Created: {created_count} task(s)[/green]")
+    if updated_count > 0:
+        console.print(f"  [green]Updated: {updated_count} task(s)[/green]")
+    console.print(f"  [cyan]Total processed: {created_count + updated_count} task(s)[/cyan]")
+
+
 def main_entry():
     """Entry point for console script."""
     app()
