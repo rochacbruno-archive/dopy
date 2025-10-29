@@ -63,10 +63,11 @@ class ConfirmDeleteScreen(ModalScreen):
         ("escape", "dismiss", "Cancel"),
     ]
 
-    def __init__(self, task_name: str, on_confirm):
+    def __init__(self, task_name: str, on_confirm, task_count: int = 1):
         super().__init__()
         self.task_name = task_name
         self.on_confirm = on_confirm
+        self.task_count = task_count
 
     def action_dismiss(self) -> None:
         """Cancel and return to home screen."""
@@ -104,9 +105,13 @@ class ConfirmDeleteScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Container(id="confirm_dialog"):
-            yield Label(f"Delete task?")
-            yield Label(f'"{self.task_name}"')
-            yield Label("This cannot be undone!")
+            if self.task_count > 1:
+                yield Label(f"Delete {self.task_count} tasks?")
+                yield Label(f"This cannot be undone!")
+            else:
+                yield Label(f"Delete task?")
+                yield Label(f'"{self.task_name}"')
+                yield Label("This cannot be undone!")
             with Horizontal():
                 yield Button("Delete", variant="error", id="confirm_delete_btn")
                 yield Button("Cancel", variant="default", id="cancel_delete_btn")
@@ -580,13 +585,14 @@ class DoListTUI(App):
         Binding("ctrl+c", "filter_cancel", "", show=False),
         Binding("ctrl+p", "filter_post", "", show=False),
         # Visible bindings in footer
-        Binding("a", "add_task", "Add Task"),
-        Binding("d", "delete_task", "Delete"),
+        Binding("a", "add_task", "Add"),
+        Binding("d", "delete_task", "Del"),
         Binding("e", "edit_task", "Edit"),
         Binding("enter", "edit_task", "Edit", show=False),
-        Binding("s", "cycle_status", "Cycle Status"),
+        Binding("s", "cycle_status", "Status"),
+        Binding("space", "toggle_selection", "Sel"),
         Binding("r", "refresh", "Refresh"),
-        Binding("x", "toggle_autorefresh", "Auto-Refresh"),
+        Binding("x", "toggle_autorefresh", "Auto-Refresh", show=False),
         Binding("/", "open_search", "Search"),
         Binding(":", "command_palette", "Commands"),
         Binding("ctrl+q", "quit", "Quit", priority=True),
@@ -620,6 +626,9 @@ class DoListTUI(App):
         self.autorefresh_enabled = False
         self.autorefresh_timer = None
         self.autorefresh_interval = config.get('autorefresh_interval', 30) if config else 30
+
+        # Multi-selection state
+        self.selected_task_ids = set()  # Set of task IDs that are currently selected
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -724,14 +733,18 @@ class DoListTUI(App):
         # Find the row with this task ID
         for row_index, row_key in enumerate(table.rows):
             row_data = table.get_row_at(row_index)
-            if row_data and str(row_data[0]) == str(task_id):
-                # Move cursor to this row using the move_cursor method
-                table.move_cursor(row=row_index)
-                # Open edit screen
-                task_row = self._tasks_table[task_id]
-                if task_row:
-                    self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
-                break
+            if row_data:
+                # Extract numeric ID from display (might be "✓ 123" or just "123")
+                display_id = str(row_data[0])
+                actual_id = int(display_id.split()[-1] if '✓' in display_id else display_id)
+                if actual_id == task_id:
+                    # Move cursor to this row using the move_cursor method
+                    table.move_cursor(row=row_index)
+                    # Open edit screen
+                    task_row = self._tasks_table[task_id]
+                    if task_row:
+                        self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
+                    break
 
     def apply_sort(self, rows):
         """Apply current sort to rows (Task 7).
@@ -771,7 +784,9 @@ class DoListTUI(App):
             try:
                 row_data = table.get_row_at(current_cursor_row)
                 if row_data:
-                    self.last_selected_task_id = int(row_data[0])
+                    # Extract numeric ID from display (might be "✓ 123" or just "123")
+                    display_id = str(row_data[0])
+                    self.last_selected_task_id = int(display_id.split()[-1] if '✓' in display_id else display_id)
             except:
                 self.last_selected_task_id = None
 
@@ -858,8 +873,13 @@ class DoListTUI(App):
                     # Show time until reminder
                     reminder_display = get_time_until(row.reminder_timestamp)
 
+            # Format ID with selection indicator
+            id_display = str(row.id)
+            if row.id in self.selected_task_ids:
+                id_display = f"[bold cyan]✓ {row.id}[/bold cyan]"
+
             table.add_row(
-                str(row.id),
+                id_display,
                 row.name,
                 row.tag,
                 status_text,
@@ -893,68 +913,149 @@ class DoListTUI(App):
         table = self.query_one("#tasks_table", DataTable)
         if table.cursor_row is not None:
             row_key = table.get_row_at(table.cursor_row)[0]
-            task_row = self._tasks_table[int(row_key)]
+            # Extract numeric ID from display (might be "✓ 123" or just "123")
+            task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+            task_row = self._tasks_table[task_id]
             if task_row:
                 self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
 
     def action_delete_task(self) -> None:
-        """Delete the selected task with confirmation."""
+        """Delete the selected task(s) with confirmation."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is None:
-            self.notify("No task selected", severity="warning")
-            return
 
-        # Get the selected task
-        row_key = table.get_row_at(table.cursor_row)[0]
-        task_row = self._tasks_table[int(row_key)]
-        if not task_row:
+        # Determine which tasks to delete
+        tasks_to_delete = []
+
+        if self.selected_task_ids:
+            # Use selected tasks
+            for task_id in self.selected_task_ids:
+                task_row = self._tasks_table[task_id]
+                if task_row:
+                    tasks_to_delete.append(task_row)
+        else:
+            # Use current cursor task
+            if table.cursor_row is None:
+                self.notify("No task selected", severity="warning")
+                return
+
+            row_key = table.get_row_at(table.cursor_row)[0]
+            # Extract numeric ID from display (might be "✓ 123" or just "123")
+            task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+            task_row = self._tasks_table[task_id]
+            if task_row:
+                tasks_to_delete.append(task_row)
+
+        if not tasks_to_delete:
             return
 
         # Define the confirmation callback
         def confirm_delete():
-            task_row.update_record(deleted=True)
+            for task_row in tasks_to_delete:
+                task_row.update_record(deleted=True)
             self.db.commit()
-            self.notify(f"Task deleted: {task_row.name}", severity="information")
+
+            if len(tasks_to_delete) == 1:
+                self.notify(f"Task deleted: {tasks_to_delete[0].name}", severity="information")
+            else:
+                self.notify(f"{len(tasks_to_delete)} tasks deleted", severity="information")
+
+            # Clear selection after bulk delete
+            if self.selected_task_ids:
+                self.selected_task_ids.clear()
+
             self.refresh_tasks()
 
         # Show confirmation dialog
-        self.push_screen(ConfirmDeleteScreen(task_row.name, confirm_delete))
+        task_name = tasks_to_delete[0].name if len(tasks_to_delete) == 1 else ""
+        self.push_screen(ConfirmDeleteScreen(task_name, confirm_delete, len(tasks_to_delete)))
 
     def action_cycle_status(self) -> None:
-        """Cycle the status of the selected task through: new -> in-progress -> done -> post -> cancel."""
+        """Cycle the status of selected task(s) through: new -> in-progress -> done -> post -> cancel."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is None:
-            self.notify("No task selected", severity="warning")
-            return
-
-        # Get the selected task
-        row_key = table.get_row_at(table.cursor_row)[0]
-        task_row = self._tasks_table[int(row_key)]
-        if not task_row:
-            return
 
         # Define the status cycle
         status_cycle = ["new", "in-progress", "done", "post", "cancel"]
 
-        # Get current status and find next status
-        current_status = task_row.status
-        try:
-            current_index = status_cycle.index(current_status)
-            next_index = (current_index + 1) % len(status_cycle)
-            next_status = status_cycle[next_index]
-        except ValueError:
-            # If current status is not in cycle, default to first status
-            next_status = status_cycle[0]
+        # Determine which tasks to cycle
+        tasks_to_cycle = []
 
-        # Update the task status
-        task_row.update_record(status=next_status)
+        if self.selected_task_ids:
+            # Use selected tasks
+            for task_id in self.selected_task_ids:
+                task_row = self._tasks_table[task_id]
+                if task_row:
+                    tasks_to_cycle.append(task_row)
+        else:
+            # Use current cursor task
+            if table.cursor_row is None:
+                self.notify("No task selected", severity="warning")
+                return
+
+            row_key = table.get_row_at(table.cursor_row)[0]
+            # Extract numeric ID from display (might be "✓ 123" or just "123")
+            task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+            task_row = self._tasks_table[task_id]
+            if task_row:
+                tasks_to_cycle.append(task_row)
+
+        if not tasks_to_cycle:
+            return
+
+        # Cycle status for all tasks
+        status_changes = []
+        for task_row in tasks_to_cycle:
+            current_status = task_row.status
+            try:
+                current_index = status_cycle.index(current_status)
+                next_index = (current_index + 1) % len(status_cycle)
+                next_status = status_cycle[next_index]
+            except ValueError:
+                # If current status is not in cycle, default to first status
+                next_status = status_cycle[0]
+
+            # Update the task status
+            task_row.update_record(status=next_status)
+            status_changes.append((current_status, next_status))
+
         self.db.commit()
 
         # Show notification
-        self.notify(f"Status changed: {current_status} → {next_status}", severity="information")
+        if len(tasks_to_cycle) == 1:
+            self.notify(f"Status changed: {status_changes[0][0]} → {status_changes[0][1]}", severity="information")
+        else:
+            self.notify(f"Status cycled for {len(tasks_to_cycle)} task(s)", severity="information")
+
+        # Clear selection after bulk operation
+        if self.selected_task_ids:
+            self.selected_task_ids.clear()
 
         # Refresh the task list to show the change
         self.refresh_tasks()
+
+    def action_toggle_selection(self) -> None:
+        """Toggle selection of the current task using space bar."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None:
+            return
+
+        # Get the task ID from the current row
+        row_key = table.get_row_at(table.cursor_row)[0]
+        # Extract numeric ID from display (might be "✓ 123" or just "123")
+        task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+
+        # Toggle selection
+        if task_id in self.selected_task_ids:
+            self.selected_task_ids.remove(task_id)
+        else:
+            self.selected_task_ids.add(task_id)
+
+        # Refresh to show the selection change
+        self.refresh_tasks()
+
+        # Show status in notification
+        count = len(self.selected_task_ids)
+        if count > 0:
+            self.notify(f"{count} task(s) selected", severity="information")
 
     def action_refresh(self) -> None:
         """Refresh the task list."""

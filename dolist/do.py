@@ -548,6 +548,7 @@ def add(
     tag: str = "default",
     status: str = "new",
     reminder: Optional[str] = None,
+    note: Optional[str] = None,
     use: Optional[str] = None,
 ):
     """Add a new task.
@@ -557,6 +558,7 @@ def add(
         tag: Task tag/category (default: "default").
         status: Task status (default: "new").
         reminder: Optional reminder text (e.g., "today", "2 hours", "next week").
+        note: Optional note to add to the task.
         use: Database name to use (optional).
     """
     init_db(use)
@@ -586,6 +588,10 @@ def add(
     if not name:
         console.print("[red]Error: Task name cannot be empty[/red]")
         return
+
+    # Add note from --note parameter if provided
+    if note:
+        notes.append(note)
 
     created_on = datetime.datetime.now()
     reminder_timestamp = None
