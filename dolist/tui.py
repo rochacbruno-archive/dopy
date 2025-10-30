@@ -828,6 +828,122 @@ class DatabaseSwitchScreen(ModalScreen):
                 self.app.notify("Please select a database or enter a new name", severity="warning")
 
 
+class KeyBindingsHelpScreen(ModalScreen):
+    """Modal screen showing all available key bindings."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Close"),
+    ]
+
+    CSS = """
+    KeyBindingsHelpScreen {
+        align: center middle;
+    }
+
+    #help_dialog {
+        width: 90%;
+        max-width: 100;
+        height: 85%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+
+    #help_dialog Label {
+        width: 100%;
+        margin: 0 0 1 0;
+    }
+
+    #help_title {
+        text-align: center;
+        text-style: bold;
+        color: $accent;
+        margin: 0 0 1 0;
+    }
+
+    #help_dialog DataTable {
+        width: 100%;
+        height: 1fr;
+    }
+
+    #help_dialog Button {
+        margin: 1 0 0 0;
+        width: 100%;
+    }
+    """
+
+    def action_dismiss(self) -> None:
+        """Close and return to home screen."""
+        self.app.pop_screen()
+
+    def compose(self) -> ComposeResult:
+        with Container(id="help_dialog"):
+            yield Label("DoList TUI - Keyboard Shortcuts", id="help_title")
+            yield DataTable(id="help_table", cursor_type="none", zebra_stripes=True)
+            yield Button("Close (Esc)", variant="primary", id="close_btn")
+
+    def on_mount(self) -> None:
+        """Populate the help table when screen mounts."""
+        table = self.query_one("#help_table", DataTable)
+        table.add_columns("Key", "Description")
+
+        # Define all keybindings with descriptions
+        keybindings = [
+            ("Task Management", ""),
+            ("a", "Add new task"),
+            ("Enter / e", "Edit selected task"),
+            ("d", "Delete selected task(s)"),
+            ("s", "Cycle task status (new → in-progress → done → post → cancel)"),
+            ("Space", "Toggle task selection (for bulk operations)"),
+            ("", ""),
+            ("Navigation & Search", ""),
+            ("/", "Open search overlay (vim-style)"),
+            (":", "Open command palette"),
+            ("?", "Show this help screen"),
+            ("p", "Go to parent task (if task has dependency)"),
+            ("c", "Show children tasks"),
+            ("", ""),
+            ("View & Filters", ""),
+            ("r", "Refresh task list"),
+            ("x", "Toggle auto-refresh"),
+            ("u", "Switch database"),
+            ("h", "View task history"),
+            ("Ctrl+a", "Filter: All tasks (cycles: active/inactive/all)"),
+            ("Ctrl+n", "Filter: New tasks"),
+            ("Ctrl+i", "Filter: In-progress tasks"),
+            ("Ctrl+d", "Filter: Done tasks"),
+            ("Ctrl+c", "Filter: Cancelled tasks"),
+            ("Ctrl+p", "Filter: Postponed tasks"),
+            ("", ""),
+            ("General", ""),
+            ("Esc", "Close modals/overlays/clear search"),
+            ("Ctrl+Q", "Quit the TUI"),
+        ]
+
+        # Add rows to table with styling
+        for key, description in keybindings:
+            if not description:
+                # Section header
+                if key:
+                    table.add_row(
+                        f"[bold cyan]{key}[/bold cyan]",
+                        ""
+                    )
+                else:
+                    # Empty row for spacing
+                    table.add_row("", "")
+            else:
+                # Regular keybinding
+                table.add_row(
+                    f"[yellow]{key}[/yellow]",
+                    description
+                )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "close_btn":
+            self.app.pop_screen()
+
+
 class DoListCommandProvider(Provider):
     """Custom command provider for DoList TUI (Task 4)."""
 
@@ -954,13 +1070,14 @@ class DoListTUI(App):
         Binding("e", "edit_task", "Edit"),
         Binding("enter", "edit_task", "Edit", show=False),
         Binding("s", "cycle_status", "Status"),
-        Binding("space", "toggle_selection", "Sel"),
-        Binding("r", "refresh", "Refresh"),
+        Binding("space", "toggle_selection", "Sel", show=False),
+        Binding("r", "refresh", "Refresh", show=False),
         Binding("x", "toggle_autorefresh", "Auto-Refresh", show=False),
         Binding("/", "open_search", "Search"),
         Binding(":", "command_palette", "Commands"),
-        Binding("u", "switch_db", "Switch DB"),
-        Binding("h", "view_history", "History"),
+        Binding("question_mark", "show_help", "Help"),
+        Binding("u", "switch_db", "Switch DB", show=False),
+        Binding("h", "view_history", "History", show=False),
         Binding("p", "goto_parent", "Parent", show=False),
         Binding("c", "show_children", "Children", show=False),
         Binding("ctrl+q", "quit", "Quit", priority=True),
@@ -1790,6 +1907,10 @@ class DoListTUI(App):
             return
 
         self.push_screen(TaskHistoryScreen(task_row, self._history_table, self.db))
+
+    def action_show_help(self) -> None:
+        """Show the help screen with all key bindings."""
+        self.push_screen(KeyBindingsHelpScreen())
 
     def action_goto_parent(self) -> None:
         """Navigate to parent task (if current task has dependency)."""

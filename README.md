@@ -328,6 +328,7 @@ Features of TUI mode:
 | `Enter` | Edit Task | Edit the selected task |
 | `/` | Search | Open vim-like search overlay |
 | `:` | Commands | Open command palette for sorting and actions |
+| `?` | Help | Show all key bindings |
 | `r` | Refresh | Manually refresh the task list |
 | `Ctrl+Q` | Quit | Exit the TUI |
 | `Esc` | Cancel | Close modals/overlays |
