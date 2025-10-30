@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the reminder service module."""
 
-import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime
 from dolist.service import trigger_reminder, run_multi_db_service_loop
 
 

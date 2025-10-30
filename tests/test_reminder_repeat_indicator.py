@@ -1,6 +1,5 @@
 """Tests for reminder repeat indicator feature."""
 
-import pytest
 from datetime import datetime, timedelta
 from dolist.reminder_parser import get_time_until
 

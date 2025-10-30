@@ -1,7 +1,7 @@
 """Tests for taskmodel module."""
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 from datetime import datetime
 from pydantic import ValidationError
 from dolist.taskmodel import Task

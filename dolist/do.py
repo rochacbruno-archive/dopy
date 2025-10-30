@@ -937,6 +937,8 @@ def ls(
     size: Optional[str] = None,
     under: Optional[int] = None,
     json: bool = False,
+    report: bool = False,
+    period: str = "month",
     action: Optional[str] = None,
     action_args: Optional[str] = None,
     yes: Annotated[bool, Parameter(name=["--yes", "-y"])] = False,
@@ -959,6 +961,8 @@ def ls(
         size: Filter by size (U, S, M, L).
         under: Filter by parent task ID (shows tasks that depend on or are under this task).
         json: Output in JSON format.
+        report: Generate metrics report for the filtered tasks.
+        period: Period for report aggregation (day, week, month, year). Default: month.
         action: Bulk action to perform on all matching tasks (done, start, cancel, new, post, delete, rm, remind).
         action_args: Arguments for the bulk action (e.g., reminder time).
         yes: Skip confirmation prompt for bulk actions.
@@ -1168,6 +1172,24 @@ def ls(
                 filtered_rows.append(row)
 
         rows = filtered_rows
+
+    # Handle report output
+    if report:
+        from .reports import calculate_metrics, format_metrics_json, format_metrics_text
+        from .taskmodel import Task
+
+        # Convert rows to Task objects for metrics calculation
+        task_objects = [Task.from_row(db, row) for row in rows]
+        metrics = calculate_metrics(task_objects, period=period)
+
+        # Output as JSON or with colored text charts
+        if json:
+            print(format_metrics_json(metrics))
+        else:
+            # Display beautiful colored bar charts (same as TUI)
+            print(format_metrics_text(metrics))
+
+        return
 
     # Handle bulk actions
     if action:

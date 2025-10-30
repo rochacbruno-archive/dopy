@@ -1,10 +1,8 @@
 """Tests for database.py module."""
 
-import pytest
 import os
 import tempfile
-from datetime import datetime
-from dolist.database import Database, FieldDef, Table, Field, Row
+from dolist.database import Database, FieldDef, Table, Field
 
 
 class TestTableFieldAccess:
@@ -84,7 +82,7 @@ class TestQueryBuilding:
         )
 
         # Build a query like the TUI does
-        query = tasks.deleted != True
+        query = tasks.deleted != True  # noqa: E712
         query &= tasks.name.like("%test%")
 
         # Should be able to convert to SQL
@@ -102,7 +100,7 @@ class TestQueryBuilding:
         )
 
         # Build a query with belongs
-        query = tasks.deleted != True
+        query = tasks.deleted != True  # noqa: E712
         query &= ~tasks.status.belongs(["done", "cancel", "post"])
 
         # Should be able to convert to SQL
@@ -112,7 +110,6 @@ class TestQueryBuilding:
     def test_combined_query_execution(self):
         """Test executing a combined query with LIKE and BELONGS."""
         # Use a temporary file to isolate this test
-        import tempfile
 
         tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
         tmpfile.close()
@@ -133,7 +130,7 @@ class TestQueryBuilding:
             db.commit()
 
             # Build and execute a query like the TUI does
-            query = tasks.deleted != True
+            query = tasks.deleted != True  # noqa: E712
             query &= ~tasks.status.belongs(["done", "cancel", "post"])
             query &= tasks.name.like("%test%")
 
@@ -170,7 +167,6 @@ class TestDatabaseBasics:
     def test_insert_and_select(self):
         """Test inserting and selecting rows."""
         # Use a temporary file to isolate this test
-        import tempfile
 
         tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
         tmpfile.close()
@@ -183,7 +179,7 @@ class TestDatabaseBasics:
             )
 
             # Insert a row
-            row_id = tasks.insert(name="Test Task")
+            tasks.insert(name="Test Task")
             db.commit()
 
             # Select all rows

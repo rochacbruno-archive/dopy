@@ -18,7 +18,6 @@ Supports flexible syntax like:
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import re
-import calendar
 
 
 # Abbreviation mappings for time units
@@ -118,7 +117,7 @@ def get_default_start_hour():
         from dolist.do import CONFIG
 
         return CONFIG.get("day_start_hour", 9)
-    except:
+    except Exception:
         return 9
 
 
