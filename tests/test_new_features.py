@@ -1,8 +1,7 @@
 """Tests for new features: JSON output, bulk actions, unquoted args, --actions flag."""
 
-import pytest
 import json
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, patch
 from datetime import datetime
 
 

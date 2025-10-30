@@ -1,6 +1,5 @@
 """Tests for colors module."""
 
-import pytest
 from dolist.colors import HEAD, FOOTER, REDBOLD, BOLD, ID, NAME, TAG, NOTE, STATUS
 
 

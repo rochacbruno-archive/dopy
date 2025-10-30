@@ -9,7 +9,6 @@ Tests all new reminder formats:
 - ISO format: 2027-01-31 12:00:00, 2027-01-31T12:00:00
 """
 
-import pytest
 from datetime import datetime, timedelta
 from dolist.reminder_parser import (
     parse_reminder,

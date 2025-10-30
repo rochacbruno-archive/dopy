@@ -1132,21 +1132,21 @@ class ReportScreen(ModalScreen):
         content_container.mount(summary)
 
         # Status distribution chart
-        if metrics['status_totals']:
+        if metrics["status_totals"]:
             status_label = Static("[bold yellow]Tasks by Status:[/bold yellow]")
             content_container.mount(status_label)
 
             # Create bar chart data
-            statuses = list(metrics['status_totals'].keys())
-            counts = list(metrics['status_totals'].values())
+            statuses = list(metrics["status_totals"].keys())
+            counts = list(metrics["status_totals"].values())
 
             # Define colors for each status
             status_colors = {
-                'new': 'cyan',
-                'in-progress': 'yellow',
-                'done': 'green',
-                'cancel': 'red',
-                'post': 'magenta',
+                "new": "cyan",
+                "in-progress": "yellow",
+                "done": "green",
+                "cancel": "red",
+                "post": "magenta",
             }
 
             # Create a custom text-based horizontal bar chart with colors
@@ -1155,11 +1155,13 @@ class ReportScreen(ModalScreen):
 
             chart_lines = ["[bold white]Tasks by Status[/bold white]", ""]
             for i, (status, count) in enumerate(zip(statuses, counts)):
-                color = status_colors.get(status, 'white')
-                pct = metrics['status_percentages'][status]
+                color = status_colors.get(status, "white")
+                pct = metrics["status_percentages"][status]
 
                 # Calculate bar length
-                bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+                bar_length = (
+                    int((count / max_count) * bar_width) if max_count > 0 else 0
+                )
                 bar = "█" * bar_length
 
                 # Alternate background for row
@@ -1177,15 +1179,15 @@ class ReportScreen(ModalScreen):
             content_container.mount(Static("\n".join(chart_lines) + "\n"))
 
         # Tag distribution chart
-        if metrics['tag_totals']:
+        if metrics["tag_totals"]:
             tag_label = Static("[bold yellow]Tasks by Tag:[/bold yellow]")
             content_container.mount(tag_label)
 
-            tags = list(metrics['tag_totals'].keys())
-            tag_counts = list(metrics['tag_totals'].values())
+            tags = list(metrics["tag_totals"].keys())
+            tag_counts = list(metrics["tag_totals"].values())
 
             # Use a variety of colors for tags
-            tag_colors = ['cyan', 'yellow', 'green', 'magenta', 'blue', 'red']
+            tag_colors = ["cyan", "yellow", "green", "magenta", "blue", "red"]
 
             # Create a custom text-based horizontal bar chart with colors
             max_count = max(tag_counts) if tag_counts else 1
@@ -1194,10 +1196,12 @@ class ReportScreen(ModalScreen):
             chart_lines = ["[bold white]Tasks by Tag[/bold white]", ""]
             for i, (tag, count) in enumerate(zip(tags, tag_counts)):
                 color = tag_colors[i % len(tag_colors)]
-                pct = metrics['tag_percentages'][tag]
+                pct = metrics["tag_percentages"][tag]
 
                 # Calculate bar length
-                bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+                bar_length = (
+                    int((count / max_count) * bar_width) if max_count > 0 else 0
+                )
                 bar = "█" * bar_length
 
                 # Alternate background for row
@@ -1215,12 +1219,12 @@ class ReportScreen(ModalScreen):
             content_container.mount(Static("\n".join(chart_lines) + "\n"))
 
         # Tasks over time
-        if metrics['total_by_period'] and len(metrics['total_by_period']) > 1:
+        if metrics["total_by_period"] and len(metrics["total_by_period"]) > 1:
             period_label = Static("[bold yellow]Tasks by Period:[/bold yellow]")
             content_container.mount(period_label)
 
-            periods = sorted(metrics['total_by_period'].keys())
-            period_counts = [metrics['total_by_period'][p] for p in periods]
+            periods = sorted(metrics["total_by_period"].keys())
+            period_counts = [metrics["total_by_period"][p] for p in periods]
 
             # Use PlotextPlot for line chart
             plot3 = PlotextPlot()
@@ -1228,13 +1232,14 @@ class ReportScreen(ModalScreen):
 
             # Access plt and create the plot
             plt3 = plot3.plt
-            plt3.plot(list(range(len(periods))), period_counts, marker="dot", color="cyan")
+            plt3.plot(
+                list(range(len(periods))), period_counts, marker="dot", color="cyan"
+            )
             plt3.title(f"Tasks Created by {self.period.title()}")
 
             # Add period breakdown
             breakdown = "\n".join(
-                f"  {period}: {count}"
-                for period, count in zip(periods, period_counts)
+                f"  {period}: {count}" for period, count in zip(periods, period_counts)
             )
             content_container.mount(Static(breakdown))
 

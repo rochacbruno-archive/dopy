@@ -1,10 +1,6 @@
 """Tests for do.py module functions."""
 
-import pytest
-import os
-import tempfile
-import shutil
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, patch
 from datetime import datetime
 
 
@@ -33,7 +29,7 @@ class TestDatabaseFunction:
     @patch("dolist.do.Database")
     def test_database_defines_correct_schema(self, mock_database_class):
         """Test that database() defines correct table schema."""
-        from dolist.do import database, FieldDef
+        from dolist.do import database
 
         mock_db = Mock()
         mock_database_class.return_value = mock_db
@@ -80,7 +76,6 @@ class TestInitDbFunction:
     @patch("dolist.do.database")
     def test_init_db_custom(self, mock_database):
         """Test init_db with custom database."""
-        import dolist.do
         from dolist.do import init_db
 
         mock_db = Mock()

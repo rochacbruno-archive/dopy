@@ -9,7 +9,7 @@ Provides metrics calculation for tasks including:
 
 from datetime import datetime, timedelta
 from collections import defaultdict
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 
 def get_period_start(date: datetime, period: str) -> datetime:
@@ -87,7 +87,7 @@ def calculate_metrics(tasks: List[Any], period: str = "month") -> Dict[str, Any]
         if isinstance(created, str):
             # Parse string date
             try:
-                created = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                created = datetime.fromisoformat(created.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 # Try alternative format
                 try:
@@ -103,12 +103,12 @@ def calculate_metrics(tasks: List[Any], period: str = "month") -> Dict[str, Any]
         total_by_period[period_label] += 1
 
         # Count by status
-        status = getattr(task, 'status', 'unknown')
+        status = getattr(task, "status", "unknown")
         status_by_period[period_label][status] += 1
         status_totals[status] += 1
 
         # Count by tag
-        tag = getattr(task, 'tag', 'default')
+        tag = getattr(task, "tag", "default")
         tag_by_period[period_label][tag] += 1
         tag_totals[tag] += 1
 
@@ -139,34 +139,125 @@ def calculate_metrics(tasks: List[Any], period: str = "month") -> Dict[str, Any]
 def format_metrics_json(metrics: Dict[str, Any]) -> str:
     """Format metrics as JSON string."""
     import json
+
     return json.dumps(metrics, indent=2)
 
 
 def format_metrics_text(metrics: Dict[str, Any]) -> str:
-    """Format metrics as human-readable text."""
-    lines = []
-    lines.append(f"Report Period: {metrics['period']}")
-    lines.append(f"Total Tasks: {metrics['total_tasks']}")
-    lines.append("")
+    """Format metrics as human-readable text with colored bar charts."""
+    from rich.console import Console
+    from io import StringIO
 
-    # Status breakdown
-    lines.append("Tasks by Status:")
-    for status, count in sorted(metrics['status_totals'].items()):
-        pct = metrics['status_percentages'][status]
-        lines.append(f"  {status}: {count} ({pct:.1f}%)")
-    lines.append("")
+    # Create a console that writes to a string
+    string_io = StringIO()
+    console = Console(file=string_io, force_terminal=True, width=100)
 
-    # Tag breakdown
-    lines.append("Tasks by Tag:")
-    for tag, count in sorted(metrics['tag_totals'].items()):
-        pct = metrics['tag_percentages'][tag]
-        lines.append(f"  {tag}: {count} ({pct:.1f}%)")
-    lines.append("")
+    # Header
+    console.print("\n[bold cyan]Task Metrics Report[/bold cyan]")
+    console.print(f"[cyan]Total Tasks:[/cyan] {metrics['total_tasks']}")
+    console.print(f"[cyan]Period:[/cyan] {metrics['period'].title()}\n")
 
-    # Period breakdown
-    lines.append("Tasks by Period:")
-    for period_label in sorted(metrics['total_by_period'].keys()):
-        count = metrics['total_by_period'][period_label]
-        lines.append(f"  {period_label}: {count}")
+    # Status distribution chart
+    if metrics["status_totals"]:
+        console.print("[bold yellow]Tasks by Status:[/bold yellow]\n")
 
-    return "\n".join(lines)
+        statuses = list(metrics["status_totals"].keys())
+        counts = list(metrics["status_totals"].values())
+
+        # Define colors for each status
+        status_colors = {
+            "new": "cyan",
+            "in-progress": "yellow",
+            "done": "green",
+            "cancel": "red",
+            "post": "magenta",
+        }
+
+        # Create colored bar chart
+        max_count = max(counts) if counts else 1
+        bar_width = 50  # Maximum bar width in characters
+
+        for i, status in enumerate(statuses):
+            color = status_colors.get(status, "white")
+            count = metrics["status_totals"][status]
+            pct = metrics["status_percentages"][status]
+
+            # Calculate bar length
+            bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+            bar = "█" * bar_length
+
+            # Alternate background for row
+            if i % 2 == 0:
+                console.print(
+                    f"[on grey11]{status:12s}[/] [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                )
+            else:
+                console.print(
+                    f"{status:12s} [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                )
+
+        console.print()
+
+    # Tag distribution chart
+    if metrics["tag_totals"]:
+        console.print("[bold yellow]Tasks by Tag:[/bold yellow]\n")
+
+        tags = list(metrics["tag_totals"].keys())
+        tag_counts = list(metrics["tag_totals"].values())
+
+        # Use a variety of colors for tags
+        tag_colors = ["cyan", "yellow", "green", "magenta", "blue", "red"]
+
+        # Create colored bar chart
+        max_count = max(tag_counts) if tag_counts else 1
+        bar_width = 50  # Maximum bar width in characters
+
+        for i, tag in enumerate(tags):
+            color = tag_colors[i % len(tag_colors)]
+            count = metrics["tag_totals"][tag]
+            pct = metrics["tag_percentages"][tag]
+
+            # Calculate bar length
+            bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+            bar = "█" * bar_length
+
+            # Alternate background for row
+            if i % 2 == 0:
+                console.print(
+                    f"[on grey11]{tag:12s}[/] [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                )
+            else:
+                console.print(
+                    f"{tag:12s} [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                )
+
+        console.print()
+
+    # Tasks over time
+    if metrics["total_by_period"] and len(metrics["total_by_period"]) > 1:
+        console.print("[bold yellow]Tasks by Period:[/bold yellow]\n")
+
+        periods = sorted(metrics["total_by_period"].keys())
+        period_counts = [metrics["total_by_period"][p] for p in periods]
+
+        max_count = max(period_counts) if period_counts else 1
+        bar_width = 50
+
+        for i, (period_label, count) in enumerate(zip(periods, period_counts)):
+            # Calculate bar length
+            bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+            bar = "█" * bar_length
+
+            # Use cyan for time series
+            if i % 2 == 0:
+                console.print(
+                    f"[on grey11]{period_label:12s}[/] [cyan]{bar}[/] [cyan bold]{count:3d}[/]"
+                )
+            else:
+                console.print(
+                    f"{period_label:12s} [cyan]{bar}[/] [cyan bold]{count:3d}[/]"
+                )
+
+        console.print()
+
+    return string_io.getvalue()
