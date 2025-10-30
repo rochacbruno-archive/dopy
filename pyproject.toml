@@ -1,6 +1,6 @@
 [project]
 name = "dolist"
-version = "0.4.3"
+version = "0.4.4"
 description = "To-Do list on Command Line Interface"
 readme = "README.md"
 requires-python = ">=3.10"
