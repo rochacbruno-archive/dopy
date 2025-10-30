@@ -16,32 +16,35 @@ from rich.console import Console
 console = Console()
 
 
-def get_systemd_service_template(python_path: str, dolist_path: str, user: str) -> str:
+def get_systemd_service_template(python_path: str, dolist_path: str, is_system: bool = False) -> str:
     """Generate systemd service template.
 
     Args:
         python_path: Path to Python executable
         dolist_path: Path to dolist command
-        user: Username to run service as
+        is_system: Whether this is a system-wide service (default: False)
 
     Returns:
         Systemd service file content
     """
+    # For user services, don't include User= directive (causes GROUP permission errors)
+    # User services already run as the current user
+    user_directive = "User=$USER\n" if is_system else ""
+
     return f"""[Unit]
 Description=DoList Reminder Service
 After=network.target
 
 [Service]
 Type=simple
-User={user}
-ExecStart={python_path} -m dolist service
+{user_directive}ExecStart={python_path} -m dolist service
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=multi-user.target
+WantedBy={"multi-user.target" if is_system else "default.target"}
 """
 
 
@@ -58,9 +61,10 @@ def install_systemd_service() -> bool:
     python_path = sys.executable
     dolist_path = shutil.which("dolist") or sys.argv[0]
     user = os.environ.get("USER", "root")
+    is_system = user == "root"
 
     # Generate service file
-    service_content = get_systemd_service_template(python_path, dolist_path, user)
+    service_content = get_systemd_service_template(python_path, dolist_path, is_system)
 
     # Determine service file location
     if user == "root":
@@ -203,8 +207,8 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
             # Query for tasks with reminders that are due
             # Exclude done/cancelled tasks
             query = (
-                (not tasks_table.deleted)
-                & (tasks_table.reminder_timestamp is not None)
+                (tasks_table.deleted == False)
+                & (tasks_table.reminder_timestamp != None)
                 & (tasks_table.reminder_timestamp <= now)
                 & ~(tasks_table.status.belongs(["done", "cancel"]))
             )
@@ -328,7 +332,7 @@ def run_multi_db_service_loop(
 
                 # Query for all tasks to count them in verbose mode
                 if verbose:
-                    all_tasks_query = not tasks_table.deleted
+                    all_tasks_query = tasks_table.deleted == False
                     all_tasks = db(all_tasks_query).select()
                     # Use parentheses instead of brackets to avoid Rich markup errors
                     console.print(
@@ -338,8 +342,8 @@ def run_multi_db_service_loop(
                 # Query for tasks with reminders that are due
                 # Exclude done/cancelled tasks
                 query = (
-                    (not tasks_table.deleted)
-                    & (tasks_table.reminder_timestamp is not None)
+                    (tasks_table.deleted == False)
+                    & (tasks_table.reminder_timestamp != None)
                     & (tasks_table.reminder_timestamp <= now)
                     & ~(tasks_table.status.belongs(["done", "cancel"]))
                 )
@@ -349,8 +353,8 @@ def run_multi_db_service_loop(
                 if verbose:
                     # Count tasks with reminders (even if not due yet)
                     reminder_query = (
-                        (not tasks_table.deleted)
-                        & (tasks_table.reminder_timestamp is not None)
+                        (tasks_table.deleted == False)
+                        & (tasks_table.reminder_timestamp != None)
                         & ~(tasks_table.status.belongs(["done", "cancel"]))
                     )
                     tasks_with_reminders = db(reminder_query).select()
