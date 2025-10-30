@@ -19,6 +19,8 @@ lines until a list is found.
 
 > tag food compras
 > reminder 2 minutes
+> size M
+> priority 9
 
 # Testar a implementação do Dolist
 

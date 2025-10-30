@@ -1536,7 +1536,9 @@ def _parse_markdown_entry(file_path: Path) -> list[dict]:
                 'tag': 'default',
                 'status': 'new',
                 'reminder': None,
-                'notes': []
+                'notes': [],
+                'priority': 0,
+                'size': 'U'
             }
             current_notes = []
             pre_list_content = []
@@ -1572,6 +1574,25 @@ def _parse_markdown_entry(file_path: Path) -> list[dict]:
                         current_task['id'] = int(task_id)
                     except ValueError:
                         pass
+
+            elif metadata.startswith('priority '):
+                priority = metadata[9:].strip()
+                if current_task:
+                    try:
+                        current_task['priority'] = int(priority)
+                    except ValueError:
+                        pass
+
+            elif metadata.startswith('size '):
+                size = metadata[5:].strip().upper()
+                if current_task:
+                    # Normalize size value
+                    if size in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
+                        size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+                        current_task['size'] = size_map[size]
+                    elif size in ('U', 'S', 'M', 'L'):
+                        current_task['size'] = size
+                    # else: keep default 'U'
 
         # List items become individual notes
         elif line_stripped.startswith('-') or line_stripped.startswith('*'):
@@ -1692,6 +1713,8 @@ def import_tasks(
                     reminder_timestamp=reminder_timestamp,
                     reminder_repeat=reminder_repeat,
                     notes=task_data.get('notes', []),
+                    priority=task_data.get('priority', 0),
+                    size=task_data.get('size', 'U'),
                     deleted=False  # Undelete the task when importing
                 )
                 db.commit()
@@ -1718,6 +1741,8 @@ def import_tasks(
                 reminder_timestamp=reminder_timestamp,
                 reminder_repeat=reminder_repeat,
                 notes=task_data.get('notes', []),
+                priority=task_data.get('priority', 0),
+                size=task_data.get('size', 'U'),
                 created_on=datetime.datetime.now()
             )
             db.commit()
