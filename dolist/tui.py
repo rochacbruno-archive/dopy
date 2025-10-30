@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal
 from textual.widgets import (
     Header,
     Footer,
@@ -19,8 +19,7 @@ from textual.widgets import (
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.command import Hit, Provider
-from rich.text import Text
-from .reminder_parser import parse_reminder, format_reminder, get_time_until
+from .reminder_parser import parse_reminder, get_time_until
 from functools import reduce
 
 
@@ -48,34 +47,34 @@ def parse_search(search_text: str) -> dict:
     parts = search_text.strip().split()
 
     for part in parts:
-        if '=' in part:
-            key, value = part.split('=', 1)
-            if key == 'tag':
-                filters['tag'] = value.split(',')
-            elif key == 'status':
-                filters['status'] = value.split(',')
-            elif key == 'priority':
+        if "=" in part:
+            key, value = part.split("=", 1)
+            if key == "tag":
+                filters["tag"] = value.split(",")
+            elif key == "status":
+                filters["status"] = value.split(",")
+            elif key == "priority":
                 # Store priority as-is to support range operators (>, >=, <, <=)
-                filters['priority'] = value
-            elif key == 'size':
+                filters["priority"] = value
+            elif key == "size":
                 # Support multiple sizes separated by comma
-                sizes = value.split(',')
+                sizes = value.split(",")
                 if len(sizes) == 1:
-                    filters['size'] = sizes[0]
+                    filters["size"] = sizes[0]
                 else:
-                    filters['size'] = sizes
-            elif key == 'name':
+                    filters["size"] = sizes
+            elif key == "name":
                 # Search only in task name
-                filters['name'] = value
-            elif key == 'note':
+                filters["name"] = value
+            elif key == "note":
                 # Search only in task notes
-                filters['note'] = value
+                filters["note"] = value
         else:
             remaining_text.append(part)
 
     if remaining_text:
         # General text search (searches both name and notes)
-        filters['text'] = ' '.join(remaining_text)
+        filters["text"] = " ".join(remaining_text)
 
     return filters
 
@@ -131,9 +130,9 @@ class ConfirmDeleteScreen(ModalScreen):
         with Container(id="confirm_dialog"):
             if self.task_count > 1:
                 yield Label(f"Delete {self.task_count} tasks?")
-                yield Label(f"This cannot be undone!")
+                yield Label("This cannot be undone!")
             else:
-                yield Label(f"Delete task?")
+                yield Label("Delete task?")
                 yield Label(f'"{self.task_name}"')
                 yield Label("This cannot be undone!")
             with Horizontal():
@@ -187,7 +186,9 @@ class SearchOverlay(ModalScreen):
     def compose(self) -> ComposeResult:
         with Horizontal(id="search_container"):
             yield Label("/")
-            yield Input(placeholder="Search: text, tag=value, status=value", id="search_input")
+            yield Input(
+                placeholder="Search: text, tag=value, status=value", id="search_input"
+            )
 
     def on_mount(self) -> None:
         """Focus the input when overlay appears."""
@@ -290,9 +291,13 @@ class AddTaskScreen(ModalScreen):
                 id="status_select",
             )
             yield Label("Reminder:")
-            yield Input(placeholder="e.g., 2h, 30min, tomorrow, 2h repeat", id="reminder_input")
+            yield Input(
+                placeholder="e.g., 2h, 30min, tomorrow, 2h repeat", id="reminder_input"
+            )
             yield Label("Priority:")
-            yield Input(placeholder="Priority (number, default: 0)", id="priority_input")
+            yield Input(
+                placeholder="Priority (number, default: 0)", id="priority_input"
+            )
             yield Label("Size:")
             yield Select(
                 [
@@ -310,7 +315,9 @@ class AddTaskScreen(ModalScreen):
             yield TextArea("", id="notes_textarea")
             with Horizontal():
                 yield Button("Add", variant="primary", classes="tight", id="add_btn")
-                yield Button("Cancel", variant="default", classes="tight", id="cancel_btn")
+                yield Button(
+                    "Cancel", variant="default", classes="tight", id="cancel_btn"
+                )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel_btn":
@@ -338,7 +345,7 @@ class AddTaskScreen(ModalScreen):
             try:
                 priority = int(priority_input.value.strip() or "0")
             except ValueError:
-                self.app.notify(f"Invalid priority: must be a number", severity="error")
+                self.app.notify("Invalid priority: must be a number", severity="error")
                 return
 
             # Get size
@@ -351,7 +358,9 @@ class AddTaskScreen(ModalScreen):
                 parsed_dt, error, repeat_interval = parse_reminder(reminder)
                 if error:
                     # Show validation error
-                    self.app.notify(f"Invalid reminder format: {error}", severity="error")
+                    self.app.notify(
+                        f"Invalid reminder format: {error}", severity="error"
+                    )
                     return
                 reminder_timestamp = parsed_dt
                 reminder_repeat = repeat_interval
@@ -423,7 +432,9 @@ class EditTaskScreen(ModalScreen):
         with Container(id="dialog"):
             yield Label(f"Edit Task #{self.task_row.id}")
             yield Label("Name:")
-            yield Input(value=self.task_row.name, placeholder="Task name", id="name_input")
+            yield Input(
+                value=self.task_row.name, placeholder="Task name", id="name_input"
+            )
             yield Label("Tag:")
             yield Input(value=self.task_row.tag, placeholder="Tag", id="tag_input")
             yield Label("Status:")
@@ -448,7 +459,7 @@ class EditTaskScreen(ModalScreen):
             )
             yield Label("Priority:")
             yield Input(
-                value=str(self.task_row.get('priority', 0)),
+                value=str(self.task_row.get("priority", 0)),
                 placeholder="Priority (number, default: 0)",
                 id="priority_input",
             )
@@ -460,7 +471,7 @@ class EditTaskScreen(ModalScreen):
                     ("Medium", "M"),
                     ("Large", "L"),
                 ],
-                value=self.task_row.get('size', 'U'),
+                value=self.task_row.get("size", "U"),
                 allow_blank=False,
                 prompt="Select size",
                 id="size_select",
@@ -470,10 +481,16 @@ class EditTaskScreen(ModalScreen):
             yield TextArea(notes_text, id="notes_textarea")
             with Horizontal():
                 yield Button("Save", variant="primary", classes="tight", id="save_btn")
-                yield Button("Cancel", variant="default", classes="tight", id="cancel_btn")
+                yield Button(
+                    "Cancel", variant="default", classes="tight", id="cancel_btn"
+                )
             with Horizontal():
-                yield Button("Delay", variant="warning", classes="tight", id="delay_reminder_btn")
-                yield Button("Delete", variant="error", classes="tight", id="delete_btn")
+                yield Button(
+                    "Delay", variant="warning", classes="tight", id="delay_reminder_btn"
+                )
+                yield Button(
+                    "Delete", variant="error", classes="tight", id="delete_btn"
+                )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel_btn":
@@ -491,7 +508,9 @@ class EditTaskScreen(ModalScreen):
                 return
 
             # Update the reminder timestamp (keep existing reminder_repeat)
-            self.task_row.update_record(reminder="delayed: 10 minutes", reminder_timestamp=parsed_dt)
+            self.task_row.update_record(
+                reminder="delayed: 10 minutes", reminder_timestamp=parsed_dt
+            )
             self.db.commit()
 
             # Record history
@@ -502,8 +521,9 @@ class EditTaskScreen(ModalScreen):
             reminder_input = self.query_one("#reminder_input", Input)
             reminder_input.value = "delayed: 10 minutes"
 
-            self.app.notify(f"Reminder delayed by 10 minutes", severity="information")
+            self.app.notify("Reminder delayed by 10 minutes", severity="information")
         elif event.button.id == "delete_btn":
+
             def confirm_delete():
                 self.task_row.update_record(deleted=True)
                 self.db.commit()
@@ -514,7 +534,9 @@ class EditTaskScreen(ModalScreen):
                 if hasattr(self.app, "refresh_tasks"):
                     self.app.refresh_tasks()
 
-            self.app.push_screen(ConfirmDeleteScreen(self.task_row.name, confirm_delete))
+            self.app.push_screen(
+                ConfirmDeleteScreen(self.task_row.name, confirm_delete)
+            )
         elif event.button.id == "save_btn":
             name_input = self.query_one("#name_input", Input)
             tag_input = self.query_one("#tag_input", Input)
@@ -535,6 +557,7 @@ class EditTaskScreen(ModalScreen):
 
             # Check if task is blocked (cannot change status)
             from dolist.dependency import parse_dependencies
+
             depends_on, _ = parse_dependencies(self.task_row.notes or [])
             if depends_on is not None:
                 # Task is blocked - use original status
@@ -547,7 +570,7 @@ class EditTaskScreen(ModalScreen):
             try:
                 priority = int(priority_input.value.strip() or "0")
             except ValueError:
-                self.app.notify(f"Invalid priority: must be a number", severity="error")
+                self.app.notify("Invalid priority: must be a number", severity="error")
                 return
 
             # Get size
@@ -555,7 +578,7 @@ class EditTaskScreen(ModalScreen):
 
             # Parse and validate reminder only if it changed
             reminder_timestamp = self.task_row.reminder_timestamp
-            reminder_repeat = getattr(self.task_row, 'reminder_repeat', None)
+            reminder_repeat = getattr(self.task_row, "reminder_repeat", None)
             if reminder != self.task_row.reminder:
                 # Reminder text changed, re-parse and validate it
                 reminder_timestamp = None
@@ -564,7 +587,9 @@ class EditTaskScreen(ModalScreen):
                     parsed_dt, error, repeat_interval = parse_reminder(reminder)
                     if error:
                         # Show validation error
-                        self.app.notify(f"Invalid reminder format: {error}", severity="error")
+                        self.app.notify(
+                            f"Invalid reminder format: {error}", severity="error"
+                        )
                         return
                     reminder_timestamp = parsed_dt
                     reminder_repeat = repeat_interval
@@ -649,7 +674,16 @@ class TaskHistoryScreen(ModalScreen):
     def on_mount(self) -> None:
         """Populate the history table when screen mounts."""
         table = self.query_one("#history_table", DataTable)
-        table.add_columns("Changed At", "Name", "Tag", "Status", "Priority", "Size", "Reminder", "Notes")
+        table.add_columns(
+            "Changed At",
+            "Name",
+            "Tag",
+            "Status",
+            "Priority",
+            "Size",
+            "Reminder",
+            "Notes",
+        )
 
         if self.history_table is None:
             table.add_row("No history available", "", "", "", "", "", "", "")
@@ -685,8 +719,8 @@ class TaskHistoryScreen(ModalScreen):
                     status_text = f"[magenta]{row.status}[/magenta]"
 
                 # Get priority and size
-                priority = row.get('priority', 0)
-                size = row.get('size', 'U')
+                priority = row.get("priority", 0)
+                size = row.get("size", "U")
 
                 # Format reminder
                 reminder_text = row.reminder or ""
@@ -790,7 +824,7 @@ class DatabaseSwitchScreen(ModalScreen):
                 options=options,
                 prompt="Choose a database",
                 id="db_select",
-                allow_blank=False
+                allow_blank=False,
             )
             yield Label("Or create new (enter name):")
             yield Input(placeholder="e.g., work, project", id="new_db_input")
@@ -811,8 +845,8 @@ class DatabaseSwitchScreen(ModalScreen):
             if new_db_input.value.strip():
                 # Create new database
                 db_name = new_db_input.value.strip()
-                if not db_name.endswith('.db'):
-                    db_name += '.db'
+                if not db_name.endswith(".db"):
+                    db_name += ".db"
                 new_db_path = Path(self.config_dir) / db_name
 
                 # Switch to new database
@@ -825,7 +859,9 @@ class DatabaseSwitchScreen(ModalScreen):
                     self.app.switch_database(db_select.value)
                 self.app.pop_screen()
             else:
-                self.app.notify("Please select a database or enter a new name", severity="warning")
+                self.app.notify(
+                    "Please select a database or enter a new name", severity="warning"
+                )
 
 
 class KeyBindingsHelpScreen(ModalScreen):
@@ -925,19 +961,13 @@ class KeyBindingsHelpScreen(ModalScreen):
             if not description:
                 # Section header
                 if key:
-                    table.add_row(
-                        f"[bold cyan]{key}[/bold cyan]",
-                        ""
-                    )
+                    table.add_row(f"[bold cyan]{key}[/bold cyan]", "")
                 else:
                     # Empty row for spacing
                     table.add_row("", "")
             else:
                 # Regular keybinding
-                table.add_row(
-                    f"[yellow]{key}[/yellow]",
-                    description
-                )
+                table.add_row(f"[yellow]{key}[/yellow]", description)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close_btn":
@@ -949,16 +979,44 @@ class DoListCommandProvider(Provider):
 
     # Define available commands as a class constant for reuse
     COMMANDS = [
-        ("Sort by Name (A-Z)", "sort-name-asc", "Sort tasks by name in ascending order"),
-        ("Sort by Name (Z-A)", "sort-name-desc", "Sort tasks by name in descending order"),
-        ("Sort by Created (Oldest)", "sort-created-asc", "Sort tasks by creation date (oldest first)"),
-        ("Sort by Created (Newest)", "sort-created-desc", "Sort tasks by creation date (newest first)"),
-        ("Sort by Status (A-Z)", "sort-status-asc", "Sort tasks by status in ascending order"),
-        ("Sort by Status (Z-A)", "sort-status-desc", "Sort tasks by status in descending order"),
+        (
+            "Sort by Name (A-Z)",
+            "sort-name-asc",
+            "Sort tasks by name in ascending order",
+        ),
+        (
+            "Sort by Name (Z-A)",
+            "sort-name-desc",
+            "Sort tasks by name in descending order",
+        ),
+        (
+            "Sort by Created (Oldest)",
+            "sort-created-asc",
+            "Sort tasks by creation date (oldest first)",
+        ),
+        (
+            "Sort by Created (Newest)",
+            "sort-created-desc",
+            "Sort tasks by creation date (newest first)",
+        ),
+        (
+            "Sort by Status (A-Z)",
+            "sort-status-asc",
+            "Sort tasks by status in ascending order",
+        ),
+        (
+            "Sort by Status (Z-A)",
+            "sort-status-desc",
+            "Sort tasks by status in descending order",
+        ),
         ("Sort by Tag (A-Z)", "sort-tag-asc", "Sort tasks by tag in ascending order"),
         ("Sort by Tag (Z-A)", "sort-tag-desc", "Sort tasks by tag in descending order"),
         ("Sort by ID (Low-High)", "sort-id-asc", "Sort tasks by ID in ascending order"),
-        ("Sort by ID (High-Low)", "sort-id-desc", "Sort tasks by ID in descending order"),
+        (
+            "Sort by ID (High-Low)",
+            "sort-id-desc",
+            "Sort tasks by ID in descending order",
+        ),
         ("Refresh", "refresh", "Manually refresh the task list"),
         ("Quit", "quit", "Exit the TUI"),
     ]
@@ -968,8 +1026,10 @@ class DoListCommandProvider(Provider):
 
         This is a separate method to avoid closure issues with lambdas.
         """
+
         def callback():
             self.app.run_command(command_name)
+
         return callback
 
     async def discover(self):
@@ -980,7 +1040,7 @@ class DoListCommandProvider(Provider):
                 score=1.0,
                 match_display=label,
                 command=self._make_callback(command_name),
-                help=help_text
+                help=help_text,
             )
 
     async def search(self, query: str):
@@ -997,7 +1057,7 @@ class DoListCommandProvider(Provider):
                     score=match_score,
                     match_display=label,
                     command=self._make_callback(command_name),
-                    help=help_text
+                    help=help_text,
                 )
 
 
@@ -1088,32 +1148,41 @@ class DoListTUI(App):
         self.db = db
         self._tasks_table = tasks_table  # Use underscore prefix to avoid conflicts
         self._history_table = history_table  # History table for tracking changes
-        self.current_filter = {"tag": None, "status": None, "search": None, "show_all": False}
+        self.current_filter = {
+            "tag": None,
+            "status": None,
+            "search": None,
+            "show_all": False,
+        }
         self.config = config or {}
-        self.config_file = config.get('config_file') if config else None
-        self.selected_task_id = config.get('selected_task_id') if config else None
-        self.db_path = config.get('db_path', 'Unknown') if config else 'Unknown'
-        self.config_dir = config.get('config_dir', '') if config else ''
+        self.config_file = config.get("config_file") if config else None
+        self.selected_task_id = config.get("selected_task_id") if config else None
+        self.db_path = config.get("db_path", "Unknown") if config else "Unknown"
+        self.config_dir = config.get("config_dir", "") if config else ""
 
         # Task 2: State for status filters
         self.active_status_filters = set()  # Empty = show all active (not done/cancel)
 
         # All filter mode: 'active', 'inactive', or 'all'
-        self.all_filter_mode = 'active'  # Default to showing active tasks
+        self.all_filter_mode = "active"  # Default to showing active tasks
 
         # Task 3: State for search filters
         self.search_filter = {}  # Dict with 'tag', 'status', 'text' keys
 
         # Task 7: State for sorting and scroll preservation
-        self.sort_column = 'priority'  # Default sort by priority (as per requirements)
-        self.sort_direction = 'desc'  # 'asc' or 'desc' - desc for priority to show high priority first
+        self.sort_column = "priority"  # Default sort by priority (as per requirements)
+        self.sort_direction = (
+            "desc"  # 'asc' or 'desc' - desc for priority to show high priority first
+        )
         self.last_scroll_y = 0
         self.last_selected_task_id = None
 
         # Task 6: State for auto-refresh
         self.autorefresh_enabled = False
         self.autorefresh_timer = None
-        self.autorefresh_interval = config.get('autorefresh_interval', 30) if config else 30
+        self.autorefresh_interval = (
+            config.get("autorefresh_interval", 30) if config else 30
+        )
 
         # Multi-selection state
         self.selected_task_ids = set()  # Set of task IDs that are currently selected
@@ -1129,12 +1198,30 @@ class DoListTUI(App):
 
             # Task 2: Status filter toggle buttons with keyboard shortcuts
             with Horizontal(id="status_buttons"):
-                yield Button("^a All (active)", variant="primary", classes="tight", id="status_all")
-                yield Button("^n New", variant="default", classes="tight", id="status_new")
-                yield Button("^i In Progress", variant="default", classes="tight", id="status_in-progress")
-                yield Button("^d Done", variant="default", classes="tight", id="status_done")
-                yield Button("^c Cancel", variant="default", classes="tight", id="status_cancel")
-                yield Button("^p Post", variant="default", classes="tight", id="status_post")
+                yield Button(
+                    "^a All (active)",
+                    variant="primary",
+                    classes="tight",
+                    id="status_all",
+                )
+                yield Button(
+                    "^n New", variant="default", classes="tight", id="status_new"
+                )
+                yield Button(
+                    "^i In Progress",
+                    variant="default",
+                    classes="tight",
+                    id="status_in-progress",
+                )
+                yield Button(
+                    "^d Done", variant="default", classes="tight", id="status_done"
+                )
+                yield Button(
+                    "^c Cancel", variant="default", classes="tight", id="status_cancel"
+                )
+                yield Button(
+                    "^p Post", variant="default", classes="tight", id="status_post"
+                )
 
             # Main task table - this should get focus
             yield DataTable(id="tasks_table", cursor_type="row")
@@ -1144,13 +1231,13 @@ class DoListTUI(App):
         """Update the All button label based on current all_filter_mode."""
         try:
             all_btn = self.query_one("#status_all", Button)
-            if self.all_filter_mode == 'active':
+            if self.all_filter_mode == "active":
                 all_btn.label = "^a All (active)"
-            elif self.all_filter_mode == 'inactive':
+            elif self.all_filter_mode == "inactive":
                 all_btn.label = "^a All (inactive)"
-            elif self.all_filter_mode == 'all':
+            elif self.all_filter_mode == "all":
                 all_btn.label = "^a All (*)"
-        except:
+        except Exception:
             pass
 
     def _record_task_history(self, task_row):
@@ -1164,6 +1251,7 @@ class DoListTUI(App):
 
         try:
             from datetime import datetime
+
             self._history_table.insert(
                 changed_at=datetime.now(),
                 task_id=task_row.id,
@@ -1177,7 +1265,7 @@ class DoListTUI(App):
                 deleted=task_row.deleted,
             )
             self.db.commit()
-        except Exception as e:
+        except Exception:
             # Don't fail if history recording fails
             pass
 
@@ -1193,71 +1281,88 @@ class DoListTUI(App):
             # Build the search filter description
             filter_parts = []
 
-            if 'text' in self.search_filter and self.search_filter['text']:
+            if "text" in self.search_filter and self.search_filter["text"]:
                 filter_parts.append(f"text: '{self.search_filter['text']}'")
 
-            if 'name' in self.search_filter and self.search_filter['name']:
+            if "name" in self.search_filter and self.search_filter["name"]:
                 filter_parts.append(f"name: '{self.search_filter['name']}'")
 
-            if 'note' in self.search_filter and self.search_filter['note']:
+            if "note" in self.search_filter and self.search_filter["note"]:
                 filter_parts.append(f"note: '{self.search_filter['note']}'")
 
-            if 'tag' in self.search_filter and self.search_filter['tag']:
-                tags = ', '.join(self.search_filter['tag'])
+            if "tag" in self.search_filter and self.search_filter["tag"]:
+                tags = ", ".join(self.search_filter["tag"])
                 filter_parts.append(f"tag: {tags}")
 
-            if 'status' in self.search_filter and self.search_filter['status']:
-                statuses = ', '.join(self.search_filter['status'])
+            if "status" in self.search_filter and self.search_filter["status"]:
+                statuses = ", ".join(self.search_filter["status"])
                 filter_parts.append(f"status: {statuses}")
 
-            if 'priority' in self.search_filter and self.search_filter['priority']:
+            if "priority" in self.search_filter and self.search_filter["priority"]:
                 filter_parts.append(f"priority: {self.search_filter['priority']}")
 
-            if 'size' in self.search_filter and self.search_filter['size']:
-                if isinstance(self.search_filter['size'], list):
-                    sizes = ', '.join(self.search_filter['size'])
+            if "size" in self.search_filter and self.search_filter["size"]:
+                if isinstance(self.search_filter["size"], list):
+                    sizes = ", ".join(self.search_filter["size"])
                     filter_parts.append(f"size: {sizes}")
                 else:
                     filter_parts.append(f"size: {self.search_filter['size']}")
 
-            if 'under' in self.search_filter and self.search_filter['under']:
+            if "under" in self.search_filter and self.search_filter["under"]:
                 filter_parts.append(f"under: #{self.search_filter['under']}")
 
             if filter_parts:
-                filter_desc = ' | '.join(filter_parts)
-                search_status.update(f"[bold cyan]{result_count} results for /{filter_desc}[/bold cyan]")
+                filter_desc = " | ".join(filter_parts)
+                search_status.update(
+                    f"[bold cyan]{result_count} results for /{filter_desc}[/bold cyan]"
+                )
             else:
                 # No active search filter
                 search_status.update("")
-        except:
+        except Exception:
             pass
 
     def on_mount(self) -> None:
         """Set up the table when the app starts."""
         # Load theme from config
-        theme = self.config.get('theme', 'textual-dark')
+        theme = self.config.get("theme", "textual-dark")
         self.theme = theme
 
         table = self.query_one("#tasks_table", DataTable)
         # Task 5: Add columns (they are clickable by default in Textual)
         # Get columns from config with default fallback
-        columns_config = self.config.get('columns', ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"])
+        columns_config = self.config.get(
+            "columns",
+            [
+                "id",
+                "name",
+                "tag",
+                "status",
+                "reminder",
+                "notes",
+                "created",
+                "priority",
+                "size",
+            ],
+        )
 
         # Map column names to display names
         column_display_map = {
-            'id': 'ID',
-            'name': 'Name',
-            'tag': 'Tag',
-            'status': 'Status',
-            'reminder': 'Reminder',
-            'notes': 'Notes',
-            'created': 'Created',
-            'priority': 'Priority',
-            'size': 'Size'
+            "id": "ID",
+            "name": "Name",
+            "tag": "Tag",
+            "status": "Status",
+            "reminder": "Reminder",
+            "notes": "Notes",
+            "created": "Created",
+            "priority": "Priority",
+            "size": "Size",
         }
 
         # Add columns based on configuration
-        display_columns = [column_display_map.get(col, col.title()) for col in columns_config]
+        display_columns = [
+            column_display_map.get(col, col.title()) for col in columns_config
+        ]
         table.add_columns(*display_columns)
 
         # Store column configuration for row building
@@ -1274,7 +1379,7 @@ class DoListTUI(App):
 
     def watch_theme(self, theme: str) -> None:
         """Watch for theme changes and persist to config."""
-        if self.config_file and theme != self.config.get('theme'):
+        if self.config_file and theme != self.config.get("theme"):
             self._save_theme(theme)
 
     def _save_theme(self, theme: str) -> None:
@@ -1284,16 +1389,17 @@ class DoListTUI(App):
 
         try:
             from pathlib import Path
+
             config_path = Path(self.config_file)
 
             if config_path.exists():
                 # Read current config
-                lines = config_path.read_text().split('\n')
+                lines = config_path.read_text().split("\n")
 
                 # Update theme line
                 updated = False
                 for i, line in enumerate(lines):
-                    if line.strip().startswith('theme ='):
+                    if line.strip().startswith("theme ="):
                         lines[i] = f'theme = "{theme}"'
                         updated = True
                         break
@@ -1301,19 +1407,21 @@ class DoListTUI(App):
                 # If theme line not found, add it to [ui] section
                 if not updated:
                     for i, line in enumerate(lines):
-                        if line.strip() == '[ui]':
+                        if line.strip() == "[ui]":
                             # Find the next section or end of file
                             j = i + 1
-                            while j < len(lines) and not lines[j].strip().startswith('['):
+                            while j < len(lines) and not lines[j].strip().startswith(
+                                "["
+                            ):
                                 j += 1
                             lines.insert(j, f'theme = "{theme}"')
                             updated = True
                             break
 
                 if updated:
-                    config_path.write_text('\n'.join(lines))
-                    self.config['theme'] = theme
-        except Exception as e:
+                    config_path.write_text("\n".join(lines))
+                    self.config["theme"] = theme
+        except Exception:
             # Silently fail - don't interrupt the user experience
             pass
 
@@ -1331,14 +1439,18 @@ class DoListTUI(App):
             if row_data:
                 # Extract numeric ID from display (might be "✓ 123" or just "123")
                 display_id = str(row_data[0])
-                actual_id = int(display_id.split()[-1] if '✓' in display_id else display_id)
+                actual_id = int(
+                    display_id.split()[-1] if "✓" in display_id else display_id
+                )
                 if actual_id == task_id:
                     # Move cursor to this row using the move_cursor method
                     table.move_cursor(row=row_index)
                     # Open edit screen
                     task_row = self._tasks_table[task_id]
                     if task_row:
-                        self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
+                        self.push_screen(
+                            EditTaskScreen(self.db, self._tasks_table, task_row)
+                        )
                     break
 
     def apply_sort(self, rows):
@@ -1353,26 +1465,34 @@ class DoListTUI(App):
         if not self.sort_column:
             return list(rows)
 
-        reverse = self.sort_direction == 'desc'
+        reverse = self.sort_direction == "desc"
         rows_list = list(rows)
 
-        if self.sort_column == 'name':
+        if self.sort_column == "name":
             return sorted(rows_list, key=lambda r: r.name.lower(), reverse=reverse)
-        elif self.sort_column == 'created':
+        elif self.sort_column == "created":
             return sorted(rows_list, key=lambda r: r.created_on, reverse=reverse)
-        elif self.sort_column == 'status':
+        elif self.sort_column == "status":
             return sorted(rows_list, key=lambda r: r.status, reverse=reverse)
-        elif self.sort_column == 'tag':
+        elif self.sort_column == "tag":
             return sorted(rows_list, key=lambda r: r.tag.lower(), reverse=reverse)
-        elif self.sort_column == 'id':
+        elif self.sort_column == "id":
             return sorted(rows_list, key=lambda r: r.id, reverse=reverse)
-        elif self.sort_column == 'priority':
+        elif self.sort_column == "priority":
             # Sort by priority first, then by created_on as secondary sort (newest first)
-            return sorted(rows_list, key=lambda r: (r.get('priority', 0), r.created_on), reverse=reverse)
-        elif self.sort_column == 'size':
+            return sorted(
+                rows_list,
+                key=lambda r: (r.get("priority", 0), r.created_on),
+                reverse=reverse,
+            )
+        elif self.sort_column == "size":
             # Sort by size with order: U, S, M, L
-            size_order = {'U': 0, 'S': 1, 'M': 2, 'L': 3}
-            return sorted(rows_list, key=lambda r: size_order.get(r.get('size', 'U'), 0), reverse=reverse)
+            size_order = {"U": 0, "S": 1, "M": 2, "L": 3}
+            return sorted(
+                rows_list,
+                key=lambda r: size_order.get(r.get("size", "U"), 0),
+                reverse=reverse,
+            )
 
         return rows_list
 
@@ -1388,42 +1508,43 @@ class DoListTUI(App):
                 if row_data:
                     # Extract numeric ID from display (might be "✓ 123" or just "123")
                     display_id = str(row_data[0])
-                    self.last_selected_task_id = int(display_id.split()[-1] if '✓' in display_id else display_id)
-            except:
+                    self.last_selected_task_id = int(
+                        display_id.split()[-1] if "✓" in display_id else display_id
+                    )
+            except Exception:
                 self.last_selected_task_id = None
 
         # Clear table
         table.clear()
 
         # Build query
-        query = self._tasks_table.deleted != True
+        query = self._tasks_table.deleted != True  # noqa: E712
 
         # Task 3: Apply search filters first (they can override status filters)
-        if 'status' in self.search_filter and self.search_filter['status']:
+        if "status" in self.search_filter and self.search_filter["status"]:
             # Search filter specifies statuses - use those
-            query &= self._tasks_table.status.belongs(self.search_filter['status'])
+            query &= self._tasks_table.status.belongs(self.search_filter["status"])
         elif self.active_status_filters:
             # Task 2: If specific statuses are selected, show only those
             query &= self._tasks_table.status.belongs(list(self.active_status_filters))
         else:
             # Use all_filter_mode to determine which tasks to show
-            if self.all_filter_mode == 'active':
+            if self.all_filter_mode == "active":
                 # Show only active tasks (new, in-progress)
                 query &= self._tasks_table.status.belongs(["new", "in-progress"])
-            elif self.all_filter_mode == 'inactive':
+            elif self.all_filter_mode == "inactive":
                 # Show only inactive tasks (done, cancel, post)
                 query &= self._tasks_table.status.belongs(["done", "cancel", "post"])
             # If 'all' mode, don't apply any status filter (show everything)
 
         # Task 3: Apply specific name search filter
-        if 'name' in self.search_filter and self.search_filter['name']:
+        if "name" in self.search_filter and self.search_filter["name"]:
             query &= self._tasks_table.name.like(f"%{self.search_filter['name']}%")
 
         # Task 3: Apply tag search filter (OR logic for multiple tags)
-        if 'tag' in self.search_filter and self.search_filter['tag']:
+        if "tag" in self.search_filter and self.search_filter["tag"]:
             tag_conditions = [
-                self._tasks_table.tag == tag
-                for tag in self.search_filter['tag']
+                self._tasks_table.tag == tag for tag in self.search_filter["tag"]
             ]
             query &= reduce(lambda a, b: a | b, tag_conditions)
 
@@ -1439,10 +1560,10 @@ class DoListTUI(App):
         rows = self.db(query).select()
 
         # Handle general text search (searches both name and notes, with name matches first)
-        if 'text' in self.search_filter and self.search_filter['text']:
+        if "text" in self.search_filter and self.search_filter["text"]:
             name_matches = []
             note_matches = []
-            search_text = self.search_filter['text'].lower()
+            search_text = self.search_filter["text"].lower()
 
             for row in rows:
                 # Check if search term is in name
@@ -1459,9 +1580,9 @@ class DoListTUI(App):
             rows = name_matches + note_matches
 
         # Handle specific note search
-        elif 'note' in self.search_filter and self.search_filter['note']:
+        elif "note" in self.search_filter and self.search_filter["note"]:
             note_matches = []
-            note_text = self.search_filter['note'].lower()
+            note_text = self.search_filter["note"].lower()
 
             for row in rows:
                 if row.notes:
@@ -1473,39 +1594,39 @@ class DoListTUI(App):
             rows = note_matches
 
         # Apply priority filter (post-query filtering to support range operators)
-        if 'priority' in self.search_filter and self.search_filter['priority']:
-            priority_filter = self.search_filter['priority']
+        if "priority" in self.search_filter and self.search_filter["priority"]:
+            priority_filter = self.search_filter["priority"]
             filtered_rows = []
             for row in rows:
-                task_priority = row.get('priority', 0)
+                task_priority = row.get("priority", 0)
                 include = False
 
                 # Check for range operators
-                if priority_filter.startswith('>='):
+                if priority_filter.startswith(">="):
                     try:
                         val = int(priority_filter[2:])
                         include = task_priority >= val
                     except ValueError:
                         pass
-                elif priority_filter.startswith('>'):
+                elif priority_filter.startswith(">"):
                     try:
                         val = int(priority_filter[1:])
                         include = task_priority > val
                     except ValueError:
                         pass
-                elif priority_filter.startswith('<='):
+                elif priority_filter.startswith("<="):
                     try:
                         val = int(priority_filter[2:])
                         include = task_priority <= val
                     except ValueError:
                         pass
-                elif priority_filter.startswith('<'):
+                elif priority_filter.startswith("<"):
                     try:
                         val = int(priority_filter[1:])
                         include = task_priority < val
                     except ValueError:
                         pass
-                elif priority_filter.startswith('='):
+                elif priority_filter.startswith("="):
                     try:
                         val = int(priority_filter[1:])
                         include = task_priority == val
@@ -1525,8 +1646,8 @@ class DoListTUI(App):
             rows = filtered_rows
 
         # Apply size filter (post-query filtering)
-        if 'size' in self.search_filter and self.search_filter['size']:
-            size_filter = self.search_filter['size']
+        if "size" in self.search_filter and self.search_filter["size"]:
+            size_filter = self.search_filter["size"]
             filtered_rows = []
 
             # Handle multiple sizes (list) or single size (string)
@@ -1535,36 +1656,47 @@ class DoListTUI(App):
                 normalized_sizes = []
                 for s in size_filter:
                     s_upper = s.upper()
-                    if s_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
-                        size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+                    if s_upper in ("SMALL", "MEDIUM", "LARGE", "UNDEFINED"):
+                        size_map = {
+                            "SMALL": "S",
+                            "MEDIUM": "M",
+                            "LARGE": "L",
+                            "UNDEFINED": "U",
+                        }
                         normalized_sizes.append(size_map[s_upper])
-                    elif s_upper in ('U', 'S', 'M', 'L'):
+                    elif s_upper in ("U", "S", "M", "L"):
                         normalized_sizes.append(s_upper)
 
                 for row in rows:
-                    task_size = row.get('size', 'U')
+                    task_size = row.get("size", "U")
                     if task_size in normalized_sizes:
                         filtered_rows.append(row)
             else:
                 # Single size
                 size_upper = size_filter.upper()
-                if size_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
-                    size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+                if size_upper in ("SMALL", "MEDIUM", "LARGE", "UNDEFINED"):
+                    size_map = {
+                        "SMALL": "S",
+                        "MEDIUM": "M",
+                        "LARGE": "L",
+                        "UNDEFINED": "U",
+                    }
                     size_upper = size_map[size_upper]
 
-                if size_upper in ('U', 'S', 'M', 'L'):
+                if size_upper in ("U", "S", "M", "L"):
                     for row in rows:
-                        task_size = row.get('size', 'U')
+                        task_size = row.get("size", "U")
                         if task_size == size_upper:
                             filtered_rows.append(row)
 
             rows = filtered_rows
 
         # Apply 'under' filter (for task dependencies)
-        if 'under' in self.search_filter and self.search_filter['under']:
+        if "under" in self.search_filter and self.search_filter["under"]:
             from dolist.dependency import parse_dependencies
+
             filtered_rows = []
-            parent_id = self.search_filter['under']
+            parent_id = self.search_filter["under"]
             for row in rows:
                 row_notes = row.notes or []
                 depends_on, under_ids = parse_dependencies(row_notes)
@@ -1599,34 +1731,35 @@ class DoListTUI(App):
                 status_text = f"[magenta]{row.status}[/magenta]"
 
             # Format reminder display
-            reminder_display = ''
+            reminder_display = ""
             if row.reminder_timestamp:
                 # Check if reminder is in the past
                 if row.reminder_timestamp < now:
                     # Auto-clear past reminders
                     row.update_record(reminder=None, reminder_timestamp=None)
                     self.db.commit()
-                    reminder_display = ''
+                    reminder_display = ""
                 else:
                     # Show time until reminder
                     reminder_display = get_time_until(row.reminder_timestamp)
 
             # Build row data based on column configuration
             row_data = {}
-            row_data['id'] = str(row.id)
+            row_data["id"] = str(row.id)
             if row.id in self.selected_task_ids:
-                row_data['id'] = f"[bold cyan]✓ {row.id}[/bold cyan]"
+                row_data["id"] = f"[bold cyan]✓ {row.id}[/bold cyan]"
 
-            row_data['priority'] = str(row.get('priority', 0))
-            row_data['size'] = row.get('size', 'U')
+            row_data["priority"] = str(row.get("priority", 0))
+            row_data["size"] = row.get("size", "U")
 
             # Handle dependency indicators
             from dolist.dependency import get_dependency_display_info, count_children
+
             dep_info = get_dependency_display_info(row.id, row.notes or [])
 
             # Build name with dependency prefix
             name_text = row.name
-            if dep_info['display_prefix']:
+            if dep_info["display_prefix"]:
                 name_text = f"{dep_info['display_prefix']} {name_text}"
 
             # Count children to add suffix
@@ -1635,24 +1768,24 @@ class DoListTUI(App):
                 name_text = f"{name_text} ({child_count})"
 
             # Apply color based on dependency type
-            if dep_info['prefix_type'] == 'blocked':
+            if dep_info["prefix_type"] == "blocked":
                 # Red-ish for blocked tasks
-                row_data['name'] = f"[red]{name_text}[/red]"
+                row_data["name"] = f"[red]{name_text}[/red]"
                 status_text = "[red]blocked[/red]"
-            elif dep_info['prefix_type'] == 'under':
+            elif dep_info["prefix_type"] == "under":
                 # Yellow-ish for under tasks
-                row_data['name'] = f"[yellow]{name_text}[/yellow]"
+                row_data["name"] = f"[yellow]{name_text}[/yellow]"
             else:
-                row_data['name'] = name_text
+                row_data["name"] = name_text
 
-            row_data['tag'] = row.tag
-            row_data['status'] = status_text
-            row_data['reminder'] = reminder_display
-            row_data['notes'] = str(len(row.notes) if row.notes else 0)
-            row_data['created'] = row.created_on.strftime("%d/%m-%H:%M")
+            row_data["tag"] = row.tag
+            row_data["status"] = status_text
+            row_data["reminder"] = reminder_display
+            row_data["notes"] = str(len(row.notes) if row.notes else 0)
+            row_data["created"] = row.created_on.strftime("%d/%m-%H:%M")
 
             # Build row in configured column order
-            ordered_row = [row_data.get(col, '') for col in self.columns_config]
+            ordered_row = [row_data.get(col, "") for col in self.columns_config]
 
             table.add_row(
                 *ordered_row,
@@ -1663,7 +1796,7 @@ class DoListTUI(App):
         if new_selection_index is not None:
             try:
                 table.move_cursor(row=new_selection_index)
-            except:
+            except Exception:
                 pass
 
         # Update search status display with result count
@@ -1687,7 +1820,7 @@ class DoListTUI(App):
         if table.cursor_row is not None and table.row_count > 0:
             row_key = table.get_row_at(table.cursor_row)[0]
             # Extract numeric ID from display (might be "✓ 123" or just "123")
-            task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+            task_id = int(row_key.split()[-1] if "✓" in row_key else row_key)
             task_row = self._tasks_table[task_id]
             if task_row:
                 self.push_screen(EditTaskScreen(self.db, self._tasks_table, task_row))
@@ -1713,7 +1846,7 @@ class DoListTUI(App):
 
             row_key = table.get_row_at(table.cursor_row)[0]
             # Extract numeric ID from display (might be "✓ 123" or just "123")
-            task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+            task_id = int(row_key.split()[-1] if "✓" in row_key else row_key)
             task_row = self._tasks_table[task_id]
             if task_row:
                 tasks_to_delete.append(task_row)
@@ -1730,9 +1863,13 @@ class DoListTUI(App):
             self.db.commit()
 
             if len(tasks_to_delete) == 1:
-                self.notify(f"Task deleted: {tasks_to_delete[0].name}", severity="information")
+                self.notify(
+                    f"Task deleted: {tasks_to_delete[0].name}", severity="information"
+                )
             else:
-                self.notify(f"{len(tasks_to_delete)} tasks deleted", severity="information")
+                self.notify(
+                    f"{len(tasks_to_delete)} tasks deleted", severity="information"
+                )
 
             # Clear selection after bulk delete
             if self.selected_task_ids:
@@ -1742,7 +1879,9 @@ class DoListTUI(App):
 
         # Show confirmation dialog
         task_name = tasks_to_delete[0].name if len(tasks_to_delete) == 1 else ""
-        self.push_screen(ConfirmDeleteScreen(task_name, confirm_delete, len(tasks_to_delete)))
+        self.push_screen(
+            ConfirmDeleteScreen(task_name, confirm_delete, len(tasks_to_delete))
+        )
 
     def action_cycle_status(self) -> None:
         """Cycle the status of selected task(s) through: new -> in-progress -> done -> post -> cancel."""
@@ -1768,7 +1907,7 @@ class DoListTUI(App):
 
             row_key = table.get_row_at(table.cursor_row)[0]
             # Extract numeric ID from display (might be "✓ 123" or just "123")
-            task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
+            task_id = int(row_key.split()[-1] if "✓" in row_key else row_key)
             task_row = self._tasks_table[task_id]
             if task_row:
                 tasks_to_cycle.append(task_row)
@@ -1781,9 +1920,13 @@ class DoListTUI(App):
         for task_row in tasks_to_cycle:
             # Check if task is blocked
             from dolist.dependency import parse_dependencies
+
             depends_on, _ = parse_dependencies(task_row.notes or [])
             if depends_on is not None:
-                self.notify(f"Cannot change status of blocked task #{task_row.id}", severity="error")
+                self.notify(
+                    f"Cannot change status of blocked task #{task_row.id}",
+                    severity="error",
+                )
                 continue
 
             current_status = task_row.status
@@ -1807,9 +1950,15 @@ class DoListTUI(App):
         # Show notification only if changes were made
         if status_changes:
             if len(status_changes) == 1:
-                self.notify(f"Status changed: {status_changes[0][0]} → {status_changes[0][1]}", severity="information")
+                self.notify(
+                    f"Status changed: {status_changes[0][0]} → {status_changes[0][1]}",
+                    severity="information",
+                )
             else:
-                self.notify(f"Status cycled for {len(status_changes)} task(s)", severity="information")
+                self.notify(
+                    f"Status cycled for {len(status_changes)} task(s)",
+                    severity="information",
+                )
 
             # Clear selection after bulk operation
             if self.selected_task_ids:
@@ -1874,10 +2023,12 @@ class DoListTUI(App):
             self.autorefresh_enabled = True
             if self.autorefresh_interval > 0:
                 self.autorefresh_timer = self.set_interval(
-                    self.autorefresh_interval,
-                    self.refresh_tasks
+                    self.autorefresh_interval, self.refresh_tasks
                 )
-            self.notify(f"✓ Auto-refresh enabled ({self.autorefresh_interval}s)", severity="information")
+            self.notify(
+                f"✓ Auto-refresh enabled ({self.autorefresh_interval}s)",
+                severity="information",
+            )
 
     def action_open_search(self) -> None:
         """Open the search overlay (Task 3)."""
@@ -1930,9 +2081,14 @@ class DoListTUI(App):
 
         # Check for parent task in notes
         from dolist.dependency import parse_dependencies
+
         depends_on, under_ids = parse_dependencies(task_row.notes or [])
 
-        parent_id = depends_on if depends_on is not None else (min(under_ids) if under_ids else None)
+        parent_id = (
+            depends_on
+            if depends_on is not None
+            else (min(under_ids) if under_ids else None)
+        )
 
         if parent_id is None:
             self.notify("Task has no parent", severity="warning")
@@ -1942,7 +2098,9 @@ class DoListTUI(App):
         for idx, row in enumerate(table.rows):
             if int(row.value) == parent_id:
                 table.move_cursor(row=idx)
-                self.notify(f"Navigated to parent task #{parent_id}", severity="information")
+                self.notify(
+                    f"Navigated to parent task #{parent_id}", severity="information"
+                )
                 return
 
         self.notify(f"Parent task #{parent_id} not in current view", severity="warning")
@@ -1959,7 +2117,7 @@ class DoListTUI(App):
         task_id = int(row_key.value)
 
         # Apply filter to show only children
-        self.search_filter = {'under': task_id}
+        self.search_filter = {"under": task_id}
         self.refresh_tasks()
         self.notify(f"Showing children of task #{task_id}", severity="information")
 
@@ -1981,7 +2139,8 @@ class DoListTUI(App):
 
             # Initialize new database connection
             new_db = Database(db_uri, folder=config_dir)
-            new_tasks_table = new_db.define_table("dolist_tasks",
+            new_tasks_table = new_db.define_table(
+                "dolist_tasks",
                 FieldDef("name", "string"),
                 FieldDef("tag", "string"),
                 FieldDef("status", "string"),
@@ -1996,7 +2155,8 @@ class DoListTUI(App):
             )
 
             # Also initialize history table
-            new_history_table = new_db.define_table("dolist_task_history",
+            _new_history_table = new_db.define_table(
+                "dolist_task_history",
                 FieldDef("changed_at", "datetime"),
                 FieldDef("task_id", "integer"),
                 FieldDef("name", "string"),
@@ -2021,19 +2181,21 @@ class DoListTUI(App):
             try:
                 db_path_widget = self.query_one("#db_path", Static)
                 db_path_widget.update(f"[dim]Database: {self.db_path}[/dim]")
-            except:
+            except Exception:
                 pass
 
             # Clear selections and filters
             self.selected_task_ids.clear()
             self.search_filter = {}
             self.active_status_filters.clear()
-            self.all_filter_mode = 'active'
+            self.all_filter_mode = "active"
 
             # Refresh task list
             self.refresh_tasks()
 
-            self.notify(f"Switched to: {Path(new_db_path).name}", severity="information")
+            self.notify(
+                f"Switched to: {Path(new_db_path).name}", severity="information"
+            )
         except Exception as e:
             self.notify(f"Error switching database: {e}", severity="error")
 
@@ -2042,7 +2204,7 @@ class DoListTUI(App):
         try:
             btn = self.query_one("#status_all", Button)
             btn.press()
-        except:
+        except Exception:
             pass
 
     def action_filter_new(self) -> None:
@@ -2050,7 +2212,7 @@ class DoListTUI(App):
         try:
             btn = self.query_one("#status_new", Button)
             btn.press()
-        except:
+        except Exception:
             pass
 
     def action_filter_in_progress(self) -> None:
@@ -2058,7 +2220,7 @@ class DoListTUI(App):
         try:
             btn = self.query_one("#status_in-progress", Button)
             btn.press()
-        except:
+        except Exception:
             pass
 
     def action_filter_done(self) -> None:
@@ -2066,7 +2228,7 @@ class DoListTUI(App):
         try:
             btn = self.query_one("#status_done", Button)
             btn.press()
-        except:
+        except Exception:
             pass
 
     def action_filter_cancel(self) -> None:
@@ -2074,7 +2236,7 @@ class DoListTUI(App):
         try:
             btn = self.query_one("#status_cancel", Button)
             btn.press()
-        except:
+        except Exception:
             pass
 
     def action_filter_post(self) -> None:
@@ -2082,7 +2244,7 @@ class DoListTUI(App):
         try:
             btn = self.query_one("#status_post", Button)
             btn.press()
-        except:
+        except Exception:
             pass
 
     def apply_search_filter(self, filters: dict, live: bool = False) -> None:
@@ -2095,9 +2257,9 @@ class DoListTUI(App):
         self.search_filter = filters
 
         # Task 3: If search includes status filter, update status toggle buttons
-        if not live and 'status' in filters and filters['status']:
+        if not live and "status" in filters and filters["status"]:
             # Update active_status_filters to match search
-            self.active_status_filters = set(filters['status'])
+            self.active_status_filters = set(filters["status"])
 
             # Update button variants
             for status in ["new", "in-progress", "done", "cancel", "post"]:
@@ -2108,14 +2270,14 @@ class DoListTUI(App):
                         btn.variant = "primary"
                     else:
                         btn.variant = "default"
-                except:
+                except Exception:
                     pass
 
             # Update "All" button
             try:
                 all_btn = self.query_one("#status_all", Button)
                 all_btn.variant = "default"
-            except:
+            except Exception:
                 pass
 
         self.refresh_tasks()
@@ -2145,7 +2307,9 @@ class DoListTUI(App):
 
                 # Notify user of sort change
                 direction_text = "ascending" if direction == "asc" else "descending"
-                self.notify(f"Sorted by {column} ({direction_text})", severity="information")
+                self.notify(
+                    f"Sorted by {column} ({direction_text})", severity="information"
+                )
 
                 # Refresh with new sort
                 self.refresh_tasks()
@@ -2155,7 +2319,7 @@ class DoListTUI(App):
         try:
             table = self.query_one("#tasks_table", DataTable)
             table.focus()
-        except:
+        except Exception:
             pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -2167,22 +2331,28 @@ class DoListTUI(App):
             # Handle "All" button - cycle through active/inactive/all modes
             if status == "all":
                 # Cycle through: active -> inactive -> all -> active
-                if self.all_filter_mode == 'active':
-                    self.all_filter_mode = 'inactive'
-                elif self.all_filter_mode == 'inactive':
-                    self.all_filter_mode = 'all'
+                if self.all_filter_mode == "active":
+                    self.all_filter_mode = "inactive"
+                elif self.all_filter_mode == "inactive":
+                    self.all_filter_mode = "all"
                 else:  # 'all'
-                    self.all_filter_mode = 'active'
+                    self.all_filter_mode = "active"
 
                 # Clear individual status filters when using All button
                 self.active_status_filters.clear()
 
                 # Reset all status buttons to default
-                for btn_id in ["status_new", "status_in-progress", "status_done", "status_cancel", "status_post"]:
+                for btn_id in [
+                    "status_new",
+                    "status_in-progress",
+                    "status_done",
+                    "status_cancel",
+                    "status_post",
+                ]:
                     try:
                         btn = self.query_one(f"#{btn_id}", Button)
                         btn.variant = "default"
-                    except:
+                    except Exception:
                         pass
 
                 # Set "All" button to primary
@@ -2214,7 +2384,7 @@ class DoListTUI(App):
                     # No individual filters, revert to All button with current mode
                     all_btn.variant = "primary"
                     self._update_all_button_label()
-            except:
+            except Exception:
                 pass
 
             self.refresh_tasks()
@@ -2239,7 +2409,11 @@ class DoListTUI(App):
         }
 
         # Get the column label from the event - use .label which is a Rich Text object
-        column_label = str(event.label.plain) if hasattr(event.label, 'plain') else str(event.label)
+        column_label = (
+            str(event.label.plain)
+            if hasattr(event.label, "plain")
+            else str(event.label)
+        )
 
         # Debug: notify that event was received
         # self.notify(f"Header clicked: {column_label}", severity="information")
@@ -2256,14 +2430,16 @@ class DoListTUI(App):
 
         # Toggle sort: if same column, toggle direction; if new column, start with asc
         if self.sort_column == column_name:
-            self.sort_direction = 'desc' if self.sort_direction == 'asc' else 'asc'
+            self.sort_direction = "desc" if self.sort_direction == "asc" else "asc"
         else:
             self.sort_column = column_name
-            self.sort_direction = 'asc'
+            self.sort_direction = "asc"
 
         # Notify user of sort change
-        direction_text = "ascending" if self.sort_direction == 'asc' else "descending"
-        self.notify(f"Sorting by {column_name} ({direction_text})", severity="information")
+        direction_text = "ascending" if self.sort_direction == "asc" else "descending"
+        self.notify(
+            f"Sorting by {column_name} ({direction_text})", severity="information"
+        )
 
         # Refresh with new sort
         self.refresh_tasks()
@@ -2291,6 +2467,7 @@ def run_tui(db, tasks_table, config=None, history_table=None):
     except Exception as e:
         # Ensure terminal is reset even if there's an error
         import sys
+
         print(f"\nError in TUI: {e}", file=sys.stderr)
         print("Terminal should be restored.", file=sys.stderr)
         raise

@@ -56,20 +56,20 @@ def install_systemd_service() -> bool:
 
     # Get paths
     python_path = sys.executable
-    dolist_path = shutil.which('dolist') or sys.argv[0]
-    user = os.environ.get('USER', 'root')
+    dolist_path = shutil.which("dolist") or sys.argv[0]
+    user = os.environ.get("USER", "root")
 
     # Generate service file
     service_content = get_systemd_service_template(python_path, dolist_path, user)
 
     # Determine service file location
-    if user == 'root':
-        service_path = Path('/etc/systemd/system/dolist-reminder.service')
+    if user == "root":
+        service_path = Path("/etc/systemd/system/dolist-reminder.service")
     else:
         # User service
-        service_dir = Path.home() / '.config' / 'systemd' / 'user'
+        service_dir = Path.home() / ".config" / "systemd" / "user"
         service_dir.mkdir(parents=True, exist_ok=True)
-        service_path = service_dir / 'dolist-reminder.service'
+        service_path = service_dir / "dolist-reminder.service"
 
     try:
         # Write service file
@@ -77,18 +77,34 @@ def install_systemd_service() -> bool:
         service_path.write_text(service_content)
 
         # Reload systemd
-        if user == 'root':
-            subprocess.run(['systemctl', 'daemon-reload'], check=True)
-            subprocess.run(['systemctl', 'enable', 'dolist-reminder.service'], check=True)
-            subprocess.run(['systemctl', 'start', 'dolist-reminder.service'], check=True)
-            console.print("[green]✓ Systemd service installed and started (system-wide)[/green]")
-            console.print("[yellow]Run: sudo systemctl status dolist-reminder.service[/yellow]")
+        if user == "root":
+            subprocess.run(["systemctl", "daemon-reload"], check=True)
+            subprocess.run(
+                ["systemctl", "enable", "dolist-reminder.service"], check=True
+            )
+            subprocess.run(
+                ["systemctl", "start", "dolist-reminder.service"], check=True
+            )
+            console.print(
+                "[green]✓ Systemd service installed and started (system-wide)[/green]"
+            )
+            console.print(
+                "[yellow]Run: sudo systemctl status dolist-reminder.service[/yellow]"
+            )
         else:
-            subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
-            subprocess.run(['systemctl', '--user', 'enable', 'dolist-reminder.service'], check=True)
-            subprocess.run(['systemctl', '--user', 'start', 'dolist-reminder.service'], check=True)
-            console.print("[green]✓ Systemd service installed and started (user service)[/green]")
-            console.print("[yellow]Run: systemctl --user status dolist-reminder.service[/yellow]")
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+            subprocess.run(
+                ["systemctl", "--user", "enable", "dolist-reminder.service"], check=True
+            )
+            subprocess.run(
+                ["systemctl", "--user", "start", "dolist-reminder.service"], check=True
+            )
+            console.print(
+                "[green]✓ Systemd service installed and started (user service)[/green]"
+            )
+            console.print(
+                "[yellow]Run: systemctl --user status dolist-reminder.service[/yellow]"
+            )
 
         return True
 
@@ -108,7 +124,7 @@ def trigger_reminder(task_data: dict, config: dict) -> None:
         config: Configuration dictionary
     """
     # Check if custom reminder_cmd is configured
-    reminder_cmd = config.get('reminder_cmd')
+    reminder_cmd = config.get("reminder_cmd")
 
     if reminder_cmd:
         # Use custom command
@@ -119,14 +135,14 @@ def trigger_reminder(task_data: dict, config: dict) -> None:
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
             stdout, stderr = process.communicate(input=json.dumps(task_data))
 
             if process.returncode != 0:
                 console.print(f"[red]Custom reminder command failed: {stderr}[/red]")
             else:
-                console.print(f"[green]✓ Custom reminder triggered successfully[/green]")
+                console.print("[green]✓ Custom reminder triggered successfully[/green]")
 
         except Exception as e:
             console.print(f"[red]Error running custom reminder command: {e}[/red]")
@@ -136,21 +152,24 @@ def trigger_reminder(task_data: dict, config: dict) -> None:
             title = f"DoList: {task_data.get('name', 'Task Reminder')}"
             body = f"Tag: {task_data.get('tag', 'N/A')}\nStatus: {task_data.get('status', 'N/A')}"
 
-            if task_data.get('notes'):
-                notes_count = len(task_data['notes'])
+            if task_data.get("notes"):
+                notes_count = len(task_data["notes"])
                 body += f"\n{notes_count} note(s) attached"
 
             console.print(f"[cyan]Sending notification: {title}[/cyan]")
 
             subprocess.run(
-                ['notify-send', title, body, '-u', 'normal', '-t', '10000'],
-                check=True
+                ["notify-send", title, body, "-u", "normal", "-t", "10000"], check=True
             )
 
-            console.print(f"[green]✓ Notification sent for task #{task_data.get('id')}[/green]")
+            console.print(
+                f"[green]✓ Notification sent for task #{task_data.get('id')}[/green]"
+            )
 
         except FileNotFoundError:
-            console.print("[red]notify-send not found. Please install libnotify or set a custom reminder_cmd[/red]")
+            console.print(
+                "[red]notify-send not found. Please install libnotify or set a custom reminder_cmd[/red]"
+            )
         except Exception as e:
             console.print(f"[red]Error sending notification: {e}[/red]")
 
@@ -178,63 +197,79 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
             # This forces SQLite to refresh its cache
             try:
                 db.commit()
-            except:
+            except Exception:
                 pass  # Ignore if there's nothing to commit
 
             # Query for tasks with reminders that are due
             # Exclude done/cancelled tasks
             query = (
-                (tasks_table.deleted != True) &
-                (tasks_table.reminder_timestamp != None) &
-                (tasks_table.reminder_timestamp <= now) &
-                ~(tasks_table.status.belongs(['done', 'cancel']))
+                (not tasks_table.deleted)
+                & (tasks_table.reminder_timestamp is not None)
+                & (tasks_table.reminder_timestamp <= now)
+                & ~(tasks_table.status.belongs(["done", "cancel"]))
             )
 
             due_tasks = db(query).select()
 
             if due_tasks:
-                console.print(f"[yellow]Found {len(due_tasks)} due reminder(s)[/yellow]")
+                console.print(
+                    f"[yellow]Found {len(due_tasks)} due reminder(s)[/yellow]"
+                )
 
                 for task_row in due_tasks:
-                    console.print(f"[cyan]Processing reminder for task #{task_row.id}: {task_row.name}[/cyan]")
+                    console.print(
+                        f"[cyan]Processing reminder for task #{task_row.id}: {task_row.name}[/cyan]"
+                    )
 
                     # Prepare task data
                     task_data = {
-                        'id': task_row.id,
-                        'name': task_row.name,
-                        'tag': task_row.tag,
-                        'status': task_row.status,
-                        'reminder': task_row.reminder,
-                        'notes': task_row.notes or [],
-                        'created_on': task_row.created_on.isoformat() if task_row.created_on else None,
+                        "id": task_row.id,
+                        "name": task_row.name,
+                        "tag": task_row.tag,
+                        "status": task_row.status,
+                        "reminder": task_row.reminder,
+                        "notes": task_row.notes or [],
+                        "created_on": (
+                            task_row.created_on.isoformat()
+                            if task_row.created_on
+                            else None
+                        ),
                     }
 
                     # Trigger reminder
                     trigger_reminder(task_data, config)
 
                     # Check if this is a recurring reminder
-                    reminder_repeat = getattr(task_row, 'reminder_repeat', None)
+                    reminder_repeat = getattr(task_row, "reminder_repeat", None)
 
                     if reminder_repeat:
                         # Reschedule the reminder
-                        console.print(f"[cyan]Rescheduling recurring reminder: {reminder_repeat}[/cyan]")
+                        console.print(
+                            f"[cyan]Rescheduling recurring reminder: {reminder_repeat}[/cyan]"
+                        )
                         next_dt, error, _ = parse_reminder(reminder_repeat)
 
                         if next_dt and not error:
                             task_row.update_record(reminder_timestamp=next_dt)
                             db.commit()
-                            console.print(f"[green]✓ Reminder rescheduled for {next_dt.strftime('%Y-%m-%d %H:%M:%S')}[/green]\n")
+                            console.print(
+                                f"[green]✓ Reminder rescheduled for {next_dt.strftime('%Y-%m-%d %H:%M:%S')}[/green]\n"
+                            )
                         else:
                             console.print(f"[red]Failed to reschedule: {error}[/red]")
                             # Clear the reminder if parsing fails
                             task_row.update_record(reminder_timestamp=None)
                             db.commit()
-                            console.print(f"[yellow]Reminder cleared due to parsing error[/yellow]\n")
+                            console.print(
+                                "[yellow]Reminder cleared due to parsing error[/yellow]\n"
+                            )
                     else:
                         # One-time reminder: clear it
                         task_row.update_record(reminder_timestamp=None)
                         db.commit()
-                        console.print(f"[green]✓ Reminder cleared for task #{task_row.id}[/green]\n")
+                        console.print(
+                            f"[green]✓ Reminder cleared for task #{task_row.id}[/green]\n"
+                        )
 
             # Wait before next check
             time.sleep(check_interval)
@@ -248,7 +283,9 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
         raise
 
 
-def run_multi_db_service_loop(db_list: list, config: dict, check_interval: int = 30, verbose: bool = False) -> None:
+def run_multi_db_service_loop(
+    db_list: list, config: dict, check_interval: int = 30, verbose: bool = False
+) -> None:
     """Run the reminder service loop for multiple databases.
 
     Args:
@@ -259,7 +296,9 @@ def run_multi_db_service_loop(db_list: list, config: dict, check_interval: int =
     """
     from .reminder_parser import parse_reminder
 
-    console.print("[bold green]DoList Multi-Database Reminder Service Started[/bold green]")
+    console.print(
+        "[bold green]DoList Multi-Database Reminder Service Started[/bold green]"
+    )
     console.print(f"[cyan]Monitoring {len(db_list)} database(s)[/cyan]")
     for _, _, db_name in db_list:
         console.print(f"  - {db_name}")
@@ -274,7 +313,9 @@ def run_multi_db_service_loop(db_list: list, config: dict, check_interval: int =
             total_due_tasks = 0
 
             if verbose:
-                console.print(f"\n[dim]>>> Cycle {cycle} at {now.strftime('%H:%M:%S')}[/dim]")
+                console.print(
+                    f"\n[dim]>>> Cycle {cycle} at {now.strftime('%H:%M:%S')}[/dim]"
+                )
 
             # Loop through all databases
             for db, tasks_table, db_name in db_list:
@@ -282,23 +323,25 @@ def run_multi_db_service_loop(db_list: list, config: dict, check_interval: int =
                 # This forces SQLite to refresh its cache
                 try:
                     db.commit()
-                except:
+                except Exception:
                     pass  # Ignore if there's nothing to commit
 
                 # Query for all tasks to count them in verbose mode
                 if verbose:
-                    all_tasks_query = tasks_table.deleted != True
+                    all_tasks_query = not tasks_table.deleted
                     all_tasks = db(all_tasks_query).select()
                     # Use parentheses instead of brackets to avoid Rich markup errors
-                    console.print(f"[dim]  ({db_name}) Total tasks: {len(all_tasks)}[/dim]")
+                    console.print(
+                        f"[dim]  ({db_name}) Total tasks: {len(all_tasks)}[/dim]"
+                    )
 
                 # Query for tasks with reminders that are due
                 # Exclude done/cancelled tasks
                 query = (
-                    (tasks_table.deleted != True) &
-                    (tasks_table.reminder_timestamp != None) &
-                    (tasks_table.reminder_timestamp <= now) &
-                    ~(tasks_table.status.belongs(['done', 'cancel']))
+                    (not tasks_table.deleted)
+                    & (tasks_table.reminder_timestamp is not None)
+                    & (tasks_table.reminder_timestamp <= now)
+                    & ~(tasks_table.status.belongs(["done", "cancel"]))
                 )
 
                 due_tasks = db(query).select()
@@ -306,68 +349,92 @@ def run_multi_db_service_loop(db_list: list, config: dict, check_interval: int =
                 if verbose:
                     # Count tasks with reminders (even if not due yet)
                     reminder_query = (
-                        (tasks_table.deleted != True) &
-                        (tasks_table.reminder_timestamp != None) &
-                        ~(tasks_table.status.belongs(['done', 'cancel']))
+                        (not tasks_table.deleted)
+                        & (tasks_table.reminder_timestamp is not None)
+                        & ~(tasks_table.status.belongs(["done", "cancel"]))
                     )
                     tasks_with_reminders = db(reminder_query).select()
                     # Use parentheses instead of brackets to avoid Rich markup errors
-                    console.print(f"[dim]  ({db_name}) Tasks with reminders: {len(tasks_with_reminders)}[/dim]")
-                    console.print(f"[dim]  ({db_name}) Due reminders: {len(due_tasks)}[/dim]")
+                    console.print(
+                        f"[dim]  ({db_name}) Tasks with reminders: {len(tasks_with_reminders)}[/dim]"
+                    )
+                    console.print(
+                        f"[dim]  ({db_name}) Due reminders: {len(due_tasks)}[/dim]"
+                    )
 
                 if due_tasks:
                     total_due_tasks += len(due_tasks)
-                    console.print(f"[yellow]Database '({db_name})': Found {len(due_tasks)} due reminder(s)[/yellow]")
+                    console.print(
+                        f"[yellow]Database '({db_name})': Found {len(due_tasks)} due reminder(s)[/yellow]"
+                    )
 
                     for task_row in due_tasks:
-                        console.print(f"[cyan]  ({db_name}) Processing task #{task_row.id}: {task_row.name}[/cyan]")
+                        console.print(
+                            f"[cyan]  ({db_name}) Processing task #{task_row.id}: {task_row.name}[/cyan]"
+                        )
 
                         # Prepare task data
                         task_data = {
-                            'id': task_row.id,
-                            'name': task_row.name,
-                            'tag': task_row.tag,
-                            'status': task_row.status,
-                            'reminder': task_row.reminder,
-                            'notes': task_row.notes or [],
-                            'created_on': task_row.created_on.isoformat() if task_row.created_on else None,
-                            'database': db_name,  # Include database name in notification
+                            "id": task_row.id,
+                            "name": task_row.name,
+                            "tag": task_row.tag,
+                            "status": task_row.status,
+                            "reminder": task_row.reminder,
+                            "notes": task_row.notes or [],
+                            "created_on": (
+                                task_row.created_on.isoformat()
+                                if task_row.created_on
+                                else None
+                            ),
+                            "database": db_name,  # Include database name in notification
                         }
 
                         # Trigger reminder
                         trigger_reminder(task_data, config)
 
                         # Check if this is a recurring reminder
-                        reminder_repeat = getattr(task_row, 'reminder_repeat', None)
+                        reminder_repeat = getattr(task_row, "reminder_repeat", None)
 
                         if reminder_repeat:
                             # Reschedule the reminder
-                            console.print(f"[cyan]  Rescheduling recurring reminder: {reminder_repeat}[/cyan]")
+                            console.print(
+                                f"[cyan]  Rescheduling recurring reminder: {reminder_repeat}[/cyan]"
+                            )
                             next_dt, error, _ = parse_reminder(reminder_repeat)
 
                             if next_dt and not error:
                                 task_row.update_record(reminder_timestamp=next_dt)
                                 db.commit()
-                                console.print(f"[green]  ✓ Reminder rescheduled for {next_dt.strftime('%Y-%m-%d %H:%M:%S')}[/green]\n")
+                                console.print(
+                                    f"[green]  ✓ Reminder rescheduled for {next_dt.strftime('%Y-%m-%d %H:%M:%S')}[/green]\n"
+                                )
                             else:
-                                console.print(f"[red]  Failed to reschedule: {error}[/red]")
+                                console.print(
+                                    f"[red]  Failed to reschedule: {error}[/red]"
+                                )
                                 # Clear the reminder if parsing fails
                                 task_row.update_record(reminder_timestamp=None)
                                 db.commit()
-                                console.print(f"[yellow]  Reminder cleared due to parsing error[/yellow]\n")
+                                console.print(
+                                    "[yellow]  Reminder cleared due to parsing error[/yellow]\n"
+                                )
                         else:
                             # One-time reminder: clear it
                             task_row.update_record(reminder_timestamp=None)
                             db.commit()
-                            console.print(f"[green]  ✓ Reminder cleared for task #{task_row.id}[/green]\n")
+                            console.print(
+                                f"[green]  ✓ Reminder cleared for task #{task_row.id}[/green]\n"
+                            )
 
             if verbose:
                 if total_due_tasks == 0:
-                    console.print(f"[dim]  No due reminders this cycle[/dim]")
+                    console.print("[dim]  No due reminders this cycle[/dim]")
 
             # Wait before next check
             if verbose:
-                console.print(f"[dim]Waiting {check_interval} seconds until next check...[/dim]")
+                console.print(
+                    f"[dim]Waiting {check_interval} seconds until next check...[/dim]"
+                )
             time.sleep(check_interval)
 
     except KeyboardInterrupt:

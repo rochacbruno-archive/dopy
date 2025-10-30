@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 
-r""" ____        _ _     _
+r"""____        _ _     _
 |  _ \  ___ | (_)___| |_
 | | | |/ _ \| | / __| __|
 | |_| | (_) | | \__ \ |_
@@ -20,13 +20,13 @@ from .database import Database, FieldDef
 import os
 import datetime
 from .taskmodel import Task
-from .colors import *
+from .colors import HEAD, ID, NAME, REDBOLD, STATUS, TAG
 from .tui import run_tui
 from pathlib import Path
 import sys
 import shutil
 from .reminder_parser import parse_reminder, format_reminder, get_time_until
-from .service import install_systemd_service, run_service_loop, trigger_reminder
+from .service import install_systemd_service, trigger_reminder
 import json
 
 # tomllib is only available in Python 3.11+, use tomli for older versions
@@ -39,27 +39,30 @@ else:
         # Fallback if tomli is not installed
         tomllib = None
 
+
 # XDG Base Directory support with backwards compatibility
 def get_config_dir():
     """Get config directory with XDG support and backwards compatibility."""
     # Check for XDG_CONFIG_HOME first (Linux/Unix standard)
-    xdg_config = os.getenv('XDG_CONFIG_HOME')
+    xdg_config = os.getenv("XDG_CONFIG_HOME")
     if xdg_config:
-        config_dir = Path(xdg_config) / 'dolist'
+        config_dir = Path(xdg_config) / "dolist"
     else:
         # Default to ~/.config/dolist on Unix-like systems
-        config_dir = Path.home() / '.config' / 'dolist'
+        config_dir = Path.home() / ".config" / "dolist"
 
     # Backwards compatibility: check if old ~/.dopy exists
-    old_dir = Path.home() / '.dopy'
+    old_dir = Path.home() / ".dopy"
     if old_dir.exists() and not config_dir.exists():
         return old_dir
 
     return config_dir
 
+
 def get_legacy_config_file():
     """Get legacy config file path for backwards compatibility."""
-    return Path.home() / '.dopyrc'
+    return Path.home() / ".dopyrc"
+
 
 BASEDIR = get_config_dir()
 
@@ -68,7 +71,7 @@ if not BASEDIR.exists():
     BASEDIR.mkdir(parents=True, exist_ok=True)
 
 # New TOML config file
-CONFIGFILE = BASEDIR / 'config.toml'
+CONFIGFILE = BASEDIR / "config.toml"
 LEGACY_CONFIGFILE = get_legacy_config_file()
 
 # Migration and config loading
@@ -77,7 +80,7 @@ if LEGACY_CONFIGFILE.exists() and not CONFIGFILE.exists():
     try:
         legacy_config = eval(LEGACY_CONFIGFILE.read_text())
         # Create new TOML config
-        toml_content = f'''# DoList Configuration File
+        toml_content = f"""# DoList Configuration File
 # This file uses TOML format
 
 [database]
@@ -90,52 +93,78 @@ uri = "sqlite://tasks.db"
 # TUI theme (default: textual-dark)
 # Available themes: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, monokai, solarized-light, solarized-dark
 theme = "textual-dark"
-'''
+"""
         CONFIGFILE.write_text(toml_content)
-        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db', 'theme': 'textual-dark'}
+        CONFIG = {
+            "dbdir": str(BASEDIR),
+            "dburi": "sqlite://tasks.db",
+            "theme": "textual-dark",
+        }
         print(f"Migrated legacy config from {LEGACY_CONFIGFILE} to {CONFIGFILE}")
     except Exception as e:
         print(f"Warning: Could not migrate legacy config: {e}")
-        CONFIG = {'dbdir': str(BASEDIR), 'dburi': 'sqlite://tasks.db'}
+        CONFIG = {"dbdir": str(BASEDIR), "dburi": "sqlite://tasks.db"}
 elif CONFIGFILE.exists():
     # Load TOML config
     try:
         if tomllib is None:
             raise ImportError("TOML library not available")
-        with open(CONFIGFILE, 'rb') as f:
+        with open(CONFIGFILE, "rb") as f:
             toml_config = tomllib.load(f)
 
         # Default columns with priority and size at the end
-        default_columns = ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
-        columns = toml_config.get('ui', {}).get('columns', default_columns)
+        default_columns = [
+            "id",
+            "name",
+            "tag",
+            "status",
+            "reminder",
+            "notes",
+            "created",
+            "priority",
+            "size",
+        ]
+        columns = toml_config.get("ui", {}).get("columns", default_columns)
 
         # Ensure 'id' is always first
-        if 'id' not in columns:
-            columns = ['id'] + columns
-        elif columns[0] != 'id':
-            columns.remove('id')
-            columns = ['id'] + columns
+        if "id" not in columns:
+            columns = ["id"] + columns
+        elif columns[0] != "id":
+            columns.remove("id")
+            columns = ["id"] + columns
 
         CONFIG = {
-            'dbdir': toml_config.get('database', {}).get('dir', str(BASEDIR)),
-            'dburi': toml_config.get('database', {}).get('uri', 'sqlite://tasks.db'),
-            'theme': toml_config.get('ui', {}).get('theme', 'textual-dark'),
-            'autorefresh_interval': toml_config.get('tui', {}).get('autorefresh_interval', 30),
-            'reminder_cmd': toml_config.get('reminders', {}).get('reminder_cmd'),
-            'columns': columns
+            "dbdir": toml_config.get("database", {}).get("dir", str(BASEDIR)),
+            "dburi": toml_config.get("database", {}).get("uri", "sqlite://tasks.db"),
+            "theme": toml_config.get("ui", {}).get("theme", "textual-dark"),
+            "autorefresh_interval": toml_config.get("tui", {}).get(
+                "autorefresh_interval", 30
+            ),
+            "reminder_cmd": toml_config.get("reminders", {}).get("reminder_cmd"),
+            "columns": columns,
         }
     except Exception as e:
         print(f"Warning: Could not load config file: {e}")
         CONFIG = {
-            'dbdir': str(BASEDIR),
-            'dburi': 'sqlite://tasks.db',
-            'theme': 'textual-dark',
-            'autorefresh_interval': 30,
-            'columns': ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+            "dbdir": str(BASEDIR),
+            "dburi": "sqlite://tasks.db",
+            "theme": "textual-dark",
+            "autorefresh_interval": 30,
+            "columns": [
+                "id",
+                "name",
+                "tag",
+                "status",
+                "reminder",
+                "notes",
+                "created",
+                "priority",
+                "size",
+            ],
         }
 else:
     # Create default TOML config
-    default_config = f'''# DoList Configuration File
+    default_config = f"""# DoList Configuration File
 # This file uses TOML format
 
 [database]
@@ -165,25 +194,35 @@ autorefresh_interval = 30
 # If set, this command will be called with task JSON piped to stdin
 # If not set, uses notify-send by default
 # reminder_cmd = "/path/to/custom/reminder/handler"
-'''
+"""
     CONFIGFILE.write_text(default_config)
     CONFIG = {
-        'dbdir': str(BASEDIR),
-        'dburi': 'sqlite://tasks.db',
-        'theme': 'textual-dark',
-        'autorefresh_interval': 30,
-        'columns': ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"]
+        "dbdir": str(BASEDIR),
+        "dburi": "sqlite://tasks.db",
+        "theme": "textual-dark",
+        "autorefresh_interval": 30,
+        "columns": [
+            "id",
+            "name",
+            "tag",
+            "status",
+            "reminder",
+            "notes",
+            "created",
+            "priority",
+            "size",
+        ],
     }
 
 # Support legacy database location (~/.dopy/dopy.db)
-legacy_db_path = Path.home() / '.dopy' / 'dopy.db'
-if legacy_db_path.exists() and 'dopy.db' in CONFIG['dburi']:
+legacy_db_path = Path.home() / ".dopy" / "dopy.db"
+if legacy_db_path.exists() and "dopy.db" in CONFIG["dburi"]:
     # Use legacy database location
-    CONFIG['dbdir'] = str(Path.home() / '.dopy')
-    CONFIG['dburi'] = 'sqlite://dopy.db'
+    CONFIG["dbdir"] = str(Path.home() / ".dopy")
+    CONFIG["dburi"] = "sqlite://dopy.db"
 
-DBDIR = CONFIG['dbdir']
-DBURI = CONFIG['dburi']
+DBDIR = CONFIG["dbdir"]
+DBURI = CONFIG["dburi"]
 
 console = Console()
 
@@ -231,13 +270,16 @@ Tips:
 def database(DBURI):
     """Initialize database connection."""
     _db = Database(DBURI, folder=DBDIR)
-    tasks = _db.define_table("dolist_tasks",
+    tasks = _db.define_table(
+        "dolist_tasks",
         FieldDef("name", "string"),
         FieldDef("tag", "string"),
         FieldDef("status", "string"),
         FieldDef("reminder", "string"),
         FieldDef("reminder_timestamp", "datetime"),
-        FieldDef("reminder_repeat", "string"),  # For recurring reminders (e.g., "2 hours")
+        FieldDef(
+            "reminder_repeat", "string"
+        ),  # For recurring reminders (e.g., "2 hours")
         FieldDef("notes", "list:string"),
         FieldDef("created_on", "datetime"),
         FieldDef("deleted", "boolean", default=False),
@@ -246,7 +288,8 @@ def database(DBURI):
     )
 
     # TaskHistory table for tracking changes
-    history = _db.define_table("dolist_task_history",
+    history = _db.define_table(
+        "dolist_task_history",
         FieldDef("changed_at", "datetime"),
         FieldDef("task_id", "integer"),
         FieldDef("name", "string"),
@@ -276,6 +319,7 @@ def init_db(use_db: Optional[str] = None):
     if use_db:
         # Check if it's an absolute path
         from pathlib import Path
+
         db_path = Path(use_db)
         if db_path.is_absolute():
             # Absolute path: override DBDIR and use just the filename in URI
@@ -283,7 +327,7 @@ def init_db(use_db: Optional[str] = None):
             dburi = f"sqlite://{db_path.name}"
         else:
             # Relative path: replace database name in URI
-            dburi = dburi.replace('tasks', use_db).replace('dopy', use_db)
+            dburi = dburi.replace("tasks", use_db).replace("dopy", use_db)
     db, tasks, history = database(dburi)
     return dburi
 
@@ -299,6 +343,7 @@ def record_task_history(task_row):
 
     try:
         from datetime import datetime
+
         history.insert(
             changed_at=datetime.now(),
             task_id=task_row.id,
@@ -310,11 +355,11 @@ def record_task_history(task_row):
             notes=task_row.notes,
             created_on=task_row.created_on,
             deleted=task_row.deleted,
-            priority=task_row.get('priority', 0),
-            size=task_row.get('size', 'U'),
+            priority=task_row.get("priority", 0),
+            size=task_row.get("size", "U"),
         )
         db.commit()
-    except Exception as e:
+    except Exception:
         # Don't fail if history recording fails
         pass
 
@@ -362,26 +407,46 @@ def default_action(
     if actions:
         console.print("[bold cyan]Available Actions for Tasks:[/bold cyan]\n")
         console.print("[yellow]Status Management:[/yellow]")
-        console.print("  • [green]start, in-progress[/green]  - Mark task as in-progress")
+        console.print(
+            "  • [green]start, in-progress[/green]  - Mark task as in-progress"
+        )
         console.print("  • [green]done[/green]                 - Mark task as done")
-        console.print("  • [green]cancel[/green]               - Mark task as cancelled")
+        console.print(
+            "  • [green]cancel[/green]               - Mark task as cancelled"
+        )
         console.print("  • [green]new[/green]                  - Mark task as new")
-        console.print("  • [green]post[/green]                 - Mark task as postponed")
+        console.print(
+            "  • [green]post[/green]                 - Mark task as postponed"
+        )
         console.print()
         console.print("[yellow]Reminder Management:[/yellow]")
-        console.print("  • [green]remind <time>[/green]        - Set a reminder (e.g., 'tomorrow', '2 hours')")
-        console.print("  • [green]delay [time][/green]         - Delay reminder (default: 10 minutes)")
-        console.print("  • [green]clear-reminder[/green]       - Clear reminder from task")
+        console.print(
+            "  • [green]remind <time>[/green]        - Set a reminder (e.g., 'tomorrow', '2 hours')"
+        )
+        console.print(
+            "  • [green]delay [time][/green]         - Delay reminder (default: 10 minutes)"
+        )
+        console.print(
+            "  • [green]clear-reminder[/green]       - Clear reminder from task"
+        )
         console.print()
         console.print("[yellow]Note Management:[/yellow]")
         console.print("  • [green]note <text>[/green]          - Add a note to task")
         console.print("  • [green]note --rm <index>[/green]    - Remove note by index")
         console.print()
         console.print("[yellow]Task Operations:[/yellow]")
-        console.print("  • [green]show[/green]                 - Show task details with notes")
-        console.print("  • [green]edit[/green]                 - Open TUI with task selected for editing")
-        console.print("  • [green]get[/green]                  - Open interactive Python shell for task")
-        console.print("  • [green]delete, rm[/green]           - Delete task (soft delete)")
+        console.print(
+            "  • [green]show[/green]                 - Show task details with notes"
+        )
+        console.print(
+            "  • [green]edit[/green]                 - Open TUI with task selected for editing"
+        )
+        console.print(
+            "  • [green]get[/green]                  - Open interactive Python shell for task"
+        )
+        console.print(
+            "  • [green]delete, rm[/green]           - Delete task (soft delete)"
+        )
         console.print()
         console.print("[yellow]Usage Examples:[/yellow]")
         console.print("  dolist 1            # Show task 1 details")
@@ -396,13 +461,13 @@ def default_action(
     if not tokens:
         # No arguments - launch TUI
         # Extract database path from URI
-        db_filename = dburi.replace('sqlite://', '')
+        db_filename = dburi.replace("sqlite://", "")
         db_path = Path(DBDIR) / db_filename
         tui_config = {
-            'theme': CONFIG.get('theme', 'textual-dark'),
-            'config_file': str(CONFIGFILE),
-            'db_path': str(db_path),
-            'config_dir': DBDIR
+            "theme": CONFIG.get("theme", "textual-dark"),
+            "config_file": str(CONFIGFILE),
+            "db_path": str(db_path),
+            "config_dir": DBDIR,
         }
         try:
             run_tui(db, tasks, tui_config, history)
@@ -437,56 +502,56 @@ def default_action(
     action_args = list(tokens[2:]) if len(tokens) > 2 else []
 
     # Handle different actions
-    if action in ['start', 'in-progress']:
-        row.update_record(status='in-progress')
+    if action in ["start", "in-progress"]:
+        row.update_record(status="in-progress")
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as in-progress[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action == 'done':
-        row.update_record(status='done')
+    elif action == "done":
+        row.update_record(status="done")
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as done[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action == 'cancel':
-        row.update_record(status='cancel')
+    elif action == "cancel":
+        row.update_record(status="cancel")
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as cancelled[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action == 'new':
-        row.update_record(status='new')
+    elif action == "new":
+        row.update_record(status="new")
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as new[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action == 'post':
-        row.update_record(status='post')
+    elif action == "post":
+        row.update_record(status="post")
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Task {id} marked as postponed[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action in ['rm', 'delete']:
+    elif action in ["rm", "delete"]:
         row.update_record(deleted=True)
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Task {id} deleted[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action == 'clear-reminder':
+    elif action == "clear-reminder":
         row.update_record(reminder=None, reminder_timestamp=None)
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Reminder cleared from task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
 
-    elif action == 'remind':
+    elif action == "remind":
         if not action_args:
             console.print("[red]Error: remind requires a time argument[/red]")
             console.print("Usage: dolist <id> remind <time>")
@@ -494,31 +559,41 @@ def default_action(
             console.print("Example: dolist 1 remind 2 hours repeat  (for recurring)")
             return
 
-        reminder_time = ' '.join(action_args)
+        reminder_time = " ".join(action_args)
         parsed_dt, error, repeat_interval = parse_reminder(reminder_time)
         if error:
             console.print(f"[red]Error parsing reminder: {error}[/red]")
             return
 
-        row.update_record(reminder=reminder_time, reminder_timestamp=parsed_dt, reminder_repeat=repeat_interval)
+        row.update_record(
+            reminder=reminder_time,
+            reminder_timestamp=parsed_dt,
+            reminder_repeat=repeat_interval,
+        )
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Reminder set for task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
         if repeat_interval:
-            console.print(f"[yellow]  Due: {format_reminder(parsed_dt)} (repeats every {repeat_interval})[/yellow]")
+            console.print(
+                f"[yellow]  Due: {format_reminder(parsed_dt)} (repeats every {repeat_interval})[/yellow]"
+            )
         else:
             console.print(f"[yellow]  Due: {format_reminder(parsed_dt)}[/yellow]")
 
-    elif action == 'delay':
+    elif action == "delay":
         # Check if task has a reminder
         if not row.reminder_timestamp:
             console.print(f"[red]Task {id} has no active reminder[/red]")
-            console.print("[yellow]Set a reminder first using: dolist {id} remind <time>[/yellow]".replace('{id}', str(id)))
+            console.print(
+                "[yellow]Set a reminder first using: dolist {id} remind <time>[/yellow]".replace(
+                    "{id}", str(id)
+                )
+            )
             return
 
         # Default to 10 minutes if no time specified
-        delay_time = ' '.join(action_args) if action_args else "10 minutes"
+        delay_time = " ".join(action_args) if action_args else "10 minutes"
 
         parsed_dt, error, _ = parse_reminder(delay_time)
         if error:
@@ -526,19 +601,21 @@ def default_action(
             return
 
         # Keep the original reminder_repeat if it exists (delay doesn't change recurrence)
-        row.update_record(reminder=f"delayed: {delay_time}", reminder_timestamp=parsed_dt)
+        row.update_record(
+            reminder=f"delayed: {delay_time}", reminder_timestamp=parsed_dt
+        )
         db.commit()
         record_task_history(row)
         console.print(f"[green]✓ Reminder delayed for task {id}[/green]")
         console.print(f"[cyan]  {row.name}[/cyan]")
         console.print(f"[yellow]  New due time: {format_reminder(parsed_dt)}[/yellow]")
 
-    elif action == 'note':
+    elif action == "note":
         row.notes = row.notes or []
 
         # Handle note addition (from args or stdin)
         if action_args:
-            note_text = ' '.join(action_args)
+            note_text = " ".join(action_args)
             row.update_record(notes=row.notes + [note_text])
             record_task_history(row)
             db.commit()
@@ -568,10 +645,10 @@ def default_action(
         # Show task with notes
         _show_task(row)
 
-    elif action == 'show':
+    elif action == "show":
         _show_task(row)
 
-    elif action == 'history':
+    elif action == "history":
         # Show task history
         if history is None:
             console.print("[red]History table not available[/red]")
@@ -582,7 +659,9 @@ def default_action(
             history_rows = db(query).select()
 
             # Sort by changed_at descending (most recent first)
-            history_rows = sorted(history_rows, key=lambda r: r.changed_at, reverse=True)
+            history_rows = sorted(
+                history_rows, key=lambda r: r.changed_at, reverse=True
+            )
 
             if not history_rows:
                 console.print(f"[yellow]No history recorded for task {id}[/yellow]")
@@ -613,27 +692,27 @@ def default_action(
                     hist_row.tag or "",
                     hist_row.status or "",
                     hist_row.reminder or "",
-                    str(notes_count)
+                    str(notes_count),
                 )
 
             console.print(table)
         except Exception as e:
             console.print(f"[red]Error loading history: {e}[/red]")
 
-    elif action == 'get':
+    elif action == "get":
         _get_task_shell(row)
 
-    elif action == 'edit':
+    elif action == "edit":
         # Open TUI with this task selected
         # Extract database path from URI
-        db_filename = dburi.replace('sqlite://', '')
+        db_filename = dburi.replace("sqlite://", "")
         db_path = Path(DBDIR) / db_filename
         tui_config = {
-            'theme': CONFIG.get('theme', 'textual-dark'),
-            'config_file': str(CONFIGFILE),
-            'selected_task_id': id,
-            'db_path': str(db_path),
-            'config_dir': DBDIR
+            "theme": CONFIG.get("theme", "textual-dark"),
+            "config_file": str(CONFIGFILE),
+            "selected_task_id": id,
+            "db_path": str(db_path),
+            "config_dir": DBDIR,
         }
         try:
             run_tui(db, tasks, tui_config, history)
@@ -646,7 +725,9 @@ def default_action(
 
     else:
         rprint(f"[red]Unknown action: {action}[/red]")
-        rprint("[yellow]Valid actions: start, done, cancel, new, post, show, rm, delete, remind, delay, clear-reminder, note, get, edit, history[/yellow]")
+        rprint(
+            "[yellow]Valid actions: start, done, cancel, new, post, show, rm, delete, remind, delay, clear-reminder, note, get, edit, history[/yellow]"
+        )
 
 
 @app.command
@@ -660,7 +741,7 @@ def shell(use: Optional[str] = None):
 
     global tasklist
     tasklist = []
-    for task in db(tasks.deleted != True).select():
+    for task in db(tasks.deleted != True).select():  # noqa: E712
         tasklist.append(Task.from_row(db, task))
 
     # Try to use ptpython for a better REPL experience
@@ -672,13 +753,17 @@ def shell(use: Optional[str] = None):
         # Custom prompt style
         class DopyPromptStyle(PromptStyle):
             def in_prompt(self):
-                return HTML('<ansigreen><b>dopy</b></ansigreen> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+                return HTML(
+                    "<ansigreen><b>dopy</b></ansigreen> <ansicyan>&gt;&gt;&gt;</ansicyan> "
+                )
 
             def in2_prompt(self, width):
-                return HTML('<ansigreen>...</ansigreen> ')
+                return HTML("<ansigreen>...</ansigreen> ")
 
             def out_prompt(self):
-                return HTML('<ansiyellow>Out</ansiyellow> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+                return HTML(
+                    "<ansiyellow>Out</ansiyellow> <ansicyan>&gt;&gt;&gt;</ansicyan> "
+                )
 
         def configure(repl):
             """Configure the ptpython REPL."""
@@ -687,7 +772,7 @@ def shell(use: Optional[str] = None):
             repl.show_signature = True
             repl.show_docstring = True
             repl.show_meta_enter_message = True
-            repl.completion_visualisation = 'MULTI_COLUMN'
+            repl.completion_visualisation = "MULTI_COLUMN"
             repl.enable_history_search = True
             repl.enable_auto_suggest = True
             repl.show_status_bar = True
@@ -695,8 +780,8 @@ def shell(use: Optional[str] = None):
             repl.swap_light_and_dark = False
 
             # Set custom prompt style
-            repl.all_prompt_styles['dopy'] = DopyPromptStyle()
-            repl.prompt_style = 'dopy'
+            repl.all_prompt_styles["dopy"] = DopyPromptStyle()
+            repl.prompt_style = "dopy"
 
         # Print banner with Rich
         console.print(SHELLDOC, style="cyan")
@@ -708,8 +793,11 @@ def shell(use: Optional[str] = None):
     except ImportError:
         # Fallback to standard REPL if ptpython is not available
         import code
+
         console.print(SHELLDOC, style="cyan")
-        console.print(f"[yellow]Note: Install ptpython for a better REPL experience[/yellow]\n")
+        console.print(
+            "[yellow]Note: Install ptpython for a better REPL experience[/yellow]\n"
+        )
         code.interact(local=globals(), banner="")
 
 
@@ -744,11 +832,13 @@ def add(
     if name is None or name == "-":
         # Read from stdin
         if sys.stdin.isatty():
-            console.print("[red]Error: No task name provided and stdin is not available[/red]")
+            console.print(
+                "[red]Error: No task name provided and stdin is not available[/red]"
+            )
             console.print("Usage: dolist add <name> or echo 'task' | dolist add")
             return
 
-        stdin_lines = sys.stdin.read().strip().split('\n')
+        stdin_lines = sys.stdin.read().strip().split("\n")
         if not stdin_lines or not stdin_lines[0]:
             console.print("[red]Error: Empty input from stdin[/red]")
             return
@@ -776,38 +866,46 @@ def add(
     if reminder:
         parsed_dt, error, repeat_interval = parse_reminder(reminder)
         if error:
-            rprint(f"[yellow]Warning: Could not parse reminder '{reminder}': {error}[/yellow]")
-            rprint("[yellow]Task will be created without a reminder timestamp.[/yellow]")
+            rprint(
+                f"[yellow]Warning: Could not parse reminder '{reminder}': {error}[/yellow]"
+            )
+            rprint(
+                "[yellow]Task will be created without a reminder timestamp.[/yellow]"
+            )
         else:
             reminder_timestamp = parsed_dt
             reminder_repeat = repeat_interval
             if repeat_interval:
-                rprint(f"[cyan]Recurring reminder set for: {format_reminder(parsed_dt)} (repeats every {repeat_interval})[/cyan]")
+                rprint(
+                    f"[cyan]Recurring reminder set for: {format_reminder(parsed_dt)} (repeats every {repeat_interval})[/cyan]"
+                )
             else:
                 rprint(f"[cyan]Reminder set for: {format_reminder(parsed_dt)}[/cyan]")
 
     # Normalize size value
     size_upper = size.upper()
-    if size_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
-        size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+    if size_upper in ("SMALL", "MEDIUM", "LARGE", "UNDEFINED"):
+        size_map = {"SMALL": "S", "MEDIUM": "M", "LARGE": "L", "UNDEFINED": "U"}
         size = size_map[size_upper]
-    elif size_upper not in ('U', 'S', 'M', 'L'):
-        rprint(f"[yellow]Warning: Invalid size '{size}', using 'U' (Undefined)[/yellow]")
-        size = 'U'
+    elif size_upper not in ("U", "S", "M", "L"):
+        rprint(
+            f"[yellow]Warning: Invalid size '{size}', using 'U' (Undefined)[/yellow]"
+        )
+        size = "U"
     else:
         size = size_upper
 
     task_id = tasks.insert(
         name=name,
-        tag=tag or 'default',
-        status=status or 'new',
+        tag=tag or "default",
+        status=status or "new",
         reminder=reminder,
         reminder_timestamp=reminder_timestamp,
         reminder_repeat=reminder_repeat,
         notes=notes if notes else None,
         created_on=created_on,
         priority=priority,
-        size=size
+        size=size,
     )
     db.commit()
     rprint(f"[green]Task {task_id} inserted[/green]")
@@ -860,8 +958,12 @@ def ls(
     """
     init_db(use)
 
-    query = tasks.deleted != True
-    query &= ~tasks.status.belongs(['done', 'cancel', 'post']) if not all and not status else tasks.id > 0
+    query = tasks.deleted != True  # noqa: E712
+    query &= (
+        ~tasks.status.belongs(["done", "cancel", "post"])
+        if not all and not status
+        else tasks.id > 0
+    )
 
     if tag:
         query &= tasks.tag == tag
@@ -870,7 +972,7 @@ def ls(
 
     # Handle specific name search
     if name:
-        query &= tasks.name.like('%%%s%%' % name.lower())
+        query &= tasks.name.like("%%%s%%" % name.lower())
 
     rows = db(query).select()
 
@@ -912,39 +1014,39 @@ def ls(
     if priority:
         filtered_rows = []
         for row in rows:
-            task_priority = row.get('priority', 0)
+            task_priority = row.get("priority", 0)
             include = False
 
             # Check for range operators
-            if priority.startswith('>='):
+            if priority.startswith(">="):
                 try:
                     val = int(priority[2:])
                     include = task_priority >= val
                 except ValueError:
                     console.print(f"[red]Invalid priority value: {priority}[/red]")
                     return
-            elif priority.startswith('>'):
+            elif priority.startswith(">"):
                 try:
                     val = int(priority[1:])
                     include = task_priority > val
                 except ValueError:
                     console.print(f"[red]Invalid priority value: {priority}[/red]")
                     return
-            elif priority.startswith('<='):
+            elif priority.startswith("<="):
                 try:
                     val = int(priority[2:])
                     include = task_priority <= val
                 except ValueError:
                     console.print(f"[red]Invalid priority value: {priority}[/red]")
                     return
-            elif priority.startswith('<'):
+            elif priority.startswith("<"):
                 try:
                     val = int(priority[1:])
                     include = task_priority < val
                 except ValueError:
                     console.print(f"[red]Invalid priority value: {priority}[/red]")
                     return
-            elif priority.startswith('='):
+            elif priority.startswith("="):
                 try:
                     val = int(priority[1:])
                     include = task_priority == val
@@ -969,17 +1071,19 @@ def ls(
     if size:
         # Normalize size input
         size_upper = size.upper()
-        if size_upper in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
-            size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
+        if size_upper in ("SMALL", "MEDIUM", "LARGE", "UNDEFINED"):
+            size_map = {"SMALL": "S", "MEDIUM": "M", "LARGE": "L", "UNDEFINED": "U"}
             size_upper = size_map[size_upper]
 
-        if size_upper not in ('U', 'S', 'M', 'L'):
-            console.print(f"[red]Invalid size: {size}. Use U, S, M, L (or Undefined, Small, Medium, Large)[/red]")
+        if size_upper not in ("U", "S", "M", "L"):
+            console.print(
+                f"[red]Invalid size: {size}. Use U, S, M, L (or Undefined, Small, Medium, Large)[/red]"
+            )
             return
 
         filtered_rows = []
         for row in rows:
-            task_size = row.get('size', 'U')
+            task_size = row.get("size", "U")
             if task_size == size_upper:
                 filtered_rows.append(row)
 
@@ -988,6 +1092,7 @@ def ls(
     # Apply 'under' filter (post-query filtering for task dependencies)
     if under is not None:
         from .dependency import parse_dependencies
+
         filtered_rows = []
         for row in rows:
             row_notes = row.notes or []
@@ -1014,7 +1119,7 @@ def ls(
                     if row.created_on.date() != filter_date:
                         include_row = False
                 except ValueError:
-                    console.print(f"[red]Invalid date format. Use YYYY-MM-DD[/red]")
+                    console.print("[red]Invalid date format. Use YYYY-MM-DD[/red]")
                     return
 
             # Check month
@@ -1026,7 +1131,7 @@ def ls(
                     if row.created_on.month != month_num:
                         include_row = False
                 except ValueError:
-                    console.print(f"[red]Invalid month. Use 1-12[/red]")
+                    console.print("[red]Invalid month. Use 1-12[/red]")
                     return
 
             # Check day
@@ -1038,7 +1143,7 @@ def ls(
                     if row.created_on.day != day_num:
                         include_row = False
                 except ValueError:
-                    console.print(f"[red]Invalid day. Use 1-31[/red]")
+                    console.print("[red]Invalid day. Use 1-31[/red]")
                     return
 
             # Check year
@@ -1048,7 +1153,7 @@ def ls(
                     if row.created_on.year != year_num:
                         include_row = False
                 except ValueError:
-                    console.print(f"[red]Invalid year[/red]")
+                    console.print("[red]Invalid year[/red]")
                     return
 
             if include_row:
@@ -1064,72 +1169,89 @@ def ls(
 
         # Confirm bulk action (unless --yes flag is set)
         if not yes:
-            console.print(f"[yellow]About to perform action '{action}' on {len(rows)} task(s)[/yellow]")
+            console.print(
+                f"[yellow]About to perform action '{action}' on {len(rows)} task(s)[/yellow]"
+            )
             for row in rows:
                 console.print(f"  - [{row.id}] {row.name}")
 
             confirmation = input("\nType 'yes' to confirm: ").strip().lower()
-            if confirmation != 'yes':
+            if confirmation != "yes":
                 console.print("[green]Bulk action cancelled.[/green]")
                 return
 
         # Perform action on each task
         for row in rows:
-            if action in ['start', 'in-progress']:
-                row.update_record(status='in-progress')
-            elif action == 'done':
-                row.update_record(status='done')
-            elif action == 'cancel':
-                row.update_record(status='cancel')
-            elif action == 'new':
-                row.update_record(status='new')
-            elif action == 'post':
-                row.update_record(status='post')
-            elif action in ['rm', 'delete']:
+            if action in ["start", "in-progress"]:
+                row.update_record(status="in-progress")
+            elif action == "done":
+                row.update_record(status="done")
+            elif action == "cancel":
+                row.update_record(status="cancel")
+            elif action == "new":
+                row.update_record(status="new")
+            elif action == "post":
+                row.update_record(status="post")
+            elif action in ["rm", "delete"]:
                 row.update_record(deleted=True)
-            elif action == 'remind':
+            elif action == "remind":
                 if not action_args:
-                    console.print("[red]Error: remind action requires time argument[/red]")
-                    console.print("Usage: dolist ls ... --action remind --action-args '2 hours'")
+                    console.print(
+                        "[red]Error: remind action requires time argument[/red]"
+                    )
+                    console.print(
+                        "Usage: dolist ls ... --action remind --action-args '2 hours'"
+                    )
                     return
                 parsed_dt, error, repeat_interval = parse_reminder(action_args)
                 if error:
                     console.print(f"[red]Error parsing reminder: {error}[/red]")
                     return
-                row.update_record(reminder=action_args, reminder_timestamp=parsed_dt, reminder_repeat=repeat_interval)
+                row.update_record(
+                    reminder=action_args,
+                    reminder_timestamp=parsed_dt,
+                    reminder_repeat=repeat_interval,
+                )
             else:
                 console.print(f"[red]Unknown action: {action}[/red]")
                 return
 
         db.commit()
-        console.print(f"[green]✓ Action '{action}' applied to {len(rows)} task(s)[/green]")
+        console.print(
+            f"[green]✓ Action '{action}' applied to {len(rows)} task(s)[/green]"
+        )
         return
 
     # Handle JSON output
     if json:
         import json as json_module
+
         tasks_data = []
         now = datetime.datetime.now()
         for row in rows:
             # Format reminder display
-            reminder_display = ''
+            reminder_display = ""
             if row.reminder_timestamp:
                 # Check if reminder is in the past
                 if row.reminder_timestamp < now:
-                    reminder_display = ''
+                    reminder_display = ""
                 else:
                     reminder_display = get_time_until(row.reminder_timestamp)
 
             task_data = {
-                'id': row.id,
-                'name': row.name,
-                'tag': row.tag,
-                'status': row.status,
-                'reminder': row.reminder,
-                'reminder_display': reminder_display,
-                'reminder_timestamp': row.reminder_timestamp.isoformat() if row.reminder_timestamp else None,
-                'notes': row.notes or [],
-                'created_on': row.created_on.isoformat() if row.created_on else None,
+                "id": row.id,
+                "name": row.name,
+                "tag": row.tag,
+                "status": row.status,
+                "reminder": row.reminder,
+                "reminder_display": reminder_display,
+                "reminder_timestamp": (
+                    row.reminder_timestamp.isoformat()
+                    if row.reminder_timestamp
+                    else None
+                ),
+                "notes": row.notes or [],
+                "created_on": row.created_on.isoformat() if row.created_on else None,
             }
             tasks_data.append(task_data)
 
@@ -1138,39 +1260,59 @@ def ls(
 
     # Handle table output
     # Get columns from config with default fallback
-    columns_config = CONFIG.get('columns', ["id", "name", "tag", "status", "reminder", "notes", "created", "priority", "size"])
+    columns_config = CONFIG.get(
+        "columns",
+        [
+            "id",
+            "name",
+            "tag",
+            "status",
+            "reminder",
+            "notes",
+            "created",
+            "priority",
+            "size",
+        ],
+    )
 
     # Import dependency functions for display
     from .dependency import get_dependency_display_info, count_children
 
     # Map column names to display names and formatting functions
     column_display_map = {
-        'id': ('ID', lambda r: ID(str(r.id))),
-        'name': ('Name', lambda r: getattr(r, '_name_display', NAME(str(r.name)))),
-        'tag': ('Tag', lambda r: TAG(str(r.tag))),
-        'status': ('Status', lambda r: getattr(r, '_status_display', STATUS(str(r.status)))),
-        'reminder': ('Reminder', lambda r: getattr(r, '_reminder_display', '')),
-        'notes': ('Notes', lambda r: str(len(r.notes) if r.notes else 0)),
-        'created': ('Created', lambda r: str(r.created_on.strftime("%d/%m-%H:%M"))),
-        'priority': ('Priority', lambda r: str(r.get('priority', 0))),
-        'size': ('Size', lambda r: str(r.get('size', 'U'))),
+        "id": ("ID", lambda r: ID(str(r.id))),
+        "name": ("Name", lambda r: getattr(r, "_name_display", NAME(str(r.name)))),
+        "tag": ("Tag", lambda r: TAG(str(r.tag))),
+        "status": (
+            "Status",
+            lambda r: getattr(r, "_status_display", STATUS(str(r.status))),
+        ),
+        "reminder": ("Reminder", lambda r: getattr(r, "_reminder_display", "")),
+        "notes": ("Notes", lambda r: str(len(r.notes) if r.notes else 0)),
+        "created": ("Created", lambda r: str(r.created_on.strftime("%d/%m-%H:%M"))),
+        "priority": ("Priority", lambda r: str(r.get("priority", 0))),
+        "size": ("Size", lambda r: str(r.get("size", "U"))),
     }
 
     # Build headers based on configuration
-    headers = [HEAD(column_display_map[col][0]) for col in columns_config if col in column_display_map]
+    headers = [
+        HEAD(column_display_map[col][0])
+        for col in columns_config
+        if col in column_display_map
+    ]
     table = [headers]
 
     now = datetime.datetime.now()
     for row in rows:
         # Format reminder display
-        reminder_display = ''
+        reminder_display = ""
         if row.reminder_timestamp:
             # Check if reminder is in the past
             if row.reminder_timestamp < now:
                 # Auto-clear past reminders
                 row.update_record(reminder=None, reminder_timestamp=None)
                 db.commit()
-                reminder_display = ''
+                reminder_display = ""
             else:
                 # Show time until reminder
                 reminder_display = get_time_until(row.reminder_timestamp)
@@ -1183,7 +1325,7 @@ def ls(
 
         # Build name with dependency prefix
         name_text = str(row.name)
-        if dep_info['display_prefix']:
+        if dep_info["display_prefix"]:
             name_text = f"{dep_info['display_prefix']} {name_text}"
 
         # Count children to add suffix
@@ -1192,21 +1334,26 @@ def ls(
             name_text = f"{name_text} ({child_count})"
 
         # Apply color based on dependency type
-        if dep_info['prefix_type'] == 'blocked':
+        if dep_info["prefix_type"] == "blocked":
             # Red-ish for blocked tasks
             row._name_display = REDBOLD(name_text)
             row._status_display = REDBOLD("blocked")
-        elif dep_info['prefix_type'] == 'under':
+        elif dep_info["prefix_type"] == "under":
             # Yellow-ish for under tasks
             from termcolor import colored
-            row._name_display = colored(name_text, 'yellow')
+
+            row._name_display = colored(name_text, "yellow")
             row._status_display = STATUS(str(row.status))
         else:
             row._name_display = NAME(name_text)
             row._status_display = STATUS(str(row.status))
 
         # Build row based on configured columns
-        fields = [column_display_map[col][1](row) for col in columns_config if col in column_display_map]
+        fields = [
+            column_display_map[col][1](row)
+            for col in columns_config
+            if col in column_display_map
+        ]
         table.append(fields)
 
     print_table(table)
@@ -1220,14 +1367,14 @@ def ls(
 
 def _show_task(task_row):
     """Helper function to show a task with all its notes."""
-    headers = [HEAD(s) for s in ['ID','Name','Tag','Status','Reminder','Created']]
+    headers = [HEAD(s) for s in ["ID", "Name", "Tag", "Status", "Reminder", "Created"]]
     fields = [
         ID(str(task_row.id)),
         NAME(str(task_row.name)),
         TAG(str(task_row.tag)),
         STATUS(str(task_row.status)),
-        str(task_row.reminder or ''),
-        str(task_row.created_on.strftime("%d/%m-%H:%M"))
+        str(task_row.reminder or ""),
+        str(task_row.created_on.strftime("%d/%m-%H:%M")),
     ]
     print_table([headers, fields])
 
@@ -1282,30 +1429,35 @@ Tips:
 
         class DopyPromptStyle(PromptStyle):
             def in_prompt(self):
-                return HTML(f'<ansigreen><b>task[{task.id}]</b></ansigreen> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+                return HTML(
+                    f"<ansigreen><b>task[{task.id}]</b></ansigreen> <ansicyan>&gt;&gt;&gt;</ansicyan> "
+                )
 
             def in2_prompt(self, width):
-                return HTML('<ansigreen>...</ansigreen> ')
+                return HTML("<ansigreen>...</ansigreen> ")
 
             def out_prompt(self):
-                return HTML('<ansiyellow>Out</ansiyellow> <ansicyan>&gt;&gt;&gt;</ansicyan> ')
+                return HTML(
+                    "<ansiyellow>Out</ansiyellow> <ansicyan>&gt;&gt;&gt;</ansicyan> "
+                )
 
         def configure(repl):
             repl.highlight_matching_parenthesis = True
             repl.show_signature = True
             repl.show_docstring = True
-            repl.completion_visualisation = 'MULTI_COLUMN'
+            repl.completion_visualisation = "MULTI_COLUMN"
             repl.enable_history_search = True
             repl.enable_auto_suggest = True
             repl.show_status_bar = True
-            repl.all_prompt_styles['dopy'] = DopyPromptStyle()
-            repl.prompt_style = 'dopy'
+            repl.all_prompt_styles["dopy"] = DopyPromptStyle()
+            repl.prompt_style = "dopy"
 
         console.print(task_banner, style="cyan")
         embed(globals(), locals(), configure=configure)
 
     except ImportError:
         import code
+
         console.print(task_banner, style="cyan")
         code.interact(local=dict(task=task), banner="")
 
@@ -1359,11 +1511,11 @@ def service(
 
     if databases:
         # CLI argument takes precedence
-        db_names = databases.split(':')
+        db_names = databases.split(":")
         console.print(f"[cyan]Using databases from CLI: {db_names}[/cyan]")
-    elif 'databases' in CONFIG.get('reminder', {}):
+    elif "databases" in CONFIG.get("reminder", {}):
         # Use config file
-        db_names = CONFIG['reminder']['databases']
+        db_names = CONFIG["reminder"]["databases"]
         console.print(f"[cyan]Using databases from config: {db_names}[/cyan]")
     elif use:
         # Fallback to single database from --use
@@ -1402,7 +1554,8 @@ def service(
             display_name = "default"
 
         # Define table for this database
-        tasks_table = db_obj.define_table("dolist_tasks",
+        tasks_table = db_obj.define_table(
+            "dolist_tasks",
             FieldDef("name", "string"),
             FieldDef("tag", "string"),
             FieldDef("status", "string"),
@@ -1421,11 +1574,12 @@ def service(
     console.print("[bold green]Starting DoList Reminder Service[/bold green]")
     console.print(f"[cyan]Monitoring {len(db_list)} database(s)[/cyan]")
     if verbose:
-        console.print(f"[cyan]Verbose mode: ON[/cyan]")
+        console.print("[cyan]Verbose mode: ON[/cyan]")
     console.print(f"[cyan]Check interval: {interval} seconds[/cyan]")
 
     # Run multi-database service loop
     from .service import run_multi_db_service_loop
+
     run_multi_db_service_loop(db_list, CONFIG, check_interval=interval, verbose=verbose)
 
 
@@ -1445,10 +1599,10 @@ def reset(
     # Get the database file path
     dburi = DBURI
     if use:
-        dburi = dburi.replace('tasks', use).replace('dopy', use)
+        dburi = dburi.replace("tasks", use).replace("dopy", use)
 
     # Extract database filename from URI (e.g., sqlite://tasks.db -> tasks.db)
-    db_filename = dburi.replace('sqlite://', '')
+    db_filename = dburi.replace("sqlite://", "")
     db_path = Path(DBDIR) / db_filename
 
     if not db_path.exists():
@@ -1458,10 +1612,14 @@ def reset(
 
     # Confirmation
     if not yes:
-        console.print(f"[bold red]WARNING: This will delete all tasks from {db_path}[/bold red]")
-        console.print("[yellow]A timestamped backup will be created before deletion.[/yellow]")
+        console.print(
+            f"[bold red]WARNING: This will delete all tasks from {db_path}[/bold red]"
+        )
+        console.print(
+            "[yellow]A timestamped backup will be created before deletion.[/yellow]"
+        )
         confirmation = input("\nType 'yes' to confirm: ").strip().lower()
-        if confirmation != 'yes':
+        if confirmation != "yes":
             console.print("[green]Reset cancelled.[/green]")
             return
 
@@ -1513,98 +1671,105 @@ def _parse_markdown_entry(file_path: Path) -> list[dict]:
     pre_list_content = []
     in_pre_list = True
 
-    for line in content.split('\n'):
+    for line in content.split("\n"):
         line_stripped = line.strip()
 
         # New task starts with #
-        if line_stripped.startswith('#'):
+        if line_stripped.startswith("#"):
             # Save previous task if exists
             if current_task:
                 # Add pre-list content as first note if exists
                 if pre_list_content:
-                    pre_list_note = '\n'.join(pre_list_content).strip()
+                    pre_list_note = "\n".join(pre_list_content).strip()
                     if pre_list_note:
                         current_notes.insert(0, pre_list_note)
 
-                current_task['notes'] = current_notes if current_notes else []
+                current_task["notes"] = current_notes if current_notes else []
                 tasks.append(current_task)
 
             # Start new task
-            task_name = line_stripped.lstrip('#').strip()
+            task_name = line_stripped.lstrip("#").strip()
             current_task = {
-                'name': task_name,
-                'tag': 'default',
-                'status': 'new',
-                'reminder': None,
-                'notes': [],
-                'priority': 0,
-                'size': 'U'
+                "name": task_name,
+                "tag": "default",
+                "status": "new",
+                "reminder": None,
+                "notes": [],
+                "priority": 0,
+                "size": "U",
             }
             current_notes = []
             pre_list_content = []
             in_pre_list = True
 
         # Metadata lines start with >
-        elif line_stripped.startswith('>'):
-            metadata = line_stripped.lstrip('>').strip()
+        elif line_stripped.startswith(">"):
+            metadata = line_stripped.lstrip(">").strip()
 
             # Parse metadata
-            if metadata.startswith('tag '):
+            if metadata.startswith("tag "):
                 # Tags can be separated by commas or spaces
                 tag_text = metadata[4:].strip()
                 # Split by commas and spaces, take the first one
-                tags = [t.strip() for t in tag_text.replace(',', ' ').split() if t.strip()]
+                tags = [
+                    t.strip() for t in tag_text.replace(",", " ").split() if t.strip()
+                ]
                 if tags and current_task:
-                    current_task['tag'] = tags[0]
+                    current_task["tag"] = tags[0]
 
-            elif metadata.startswith('status '):
+            elif metadata.startswith("status "):
                 status = metadata[7:].strip()
                 if current_task:
-                    current_task['status'] = status
+                    current_task["status"] = status
 
-            elif metadata.startswith('reminder '):
+            elif metadata.startswith("reminder "):
                 reminder = metadata[9:].strip()
                 if current_task:
-                    current_task['reminder'] = reminder
+                    current_task["reminder"] = reminder
 
-            elif metadata.startswith('id '):
+            elif metadata.startswith("id "):
                 task_id = metadata[3:].strip()
                 if current_task:
                     try:
-                        current_task['id'] = int(task_id)
+                        current_task["id"] = int(task_id)
                     except ValueError:
                         pass
 
-            elif metadata.startswith('priority '):
+            elif metadata.startswith("priority "):
                 priority = metadata[9:].strip()
                 if current_task:
                     try:
-                        current_task['priority'] = int(priority)
+                        current_task["priority"] = int(priority)
                     except ValueError:
                         pass
 
-            elif metadata.startswith('size '):
+            elif metadata.startswith("size "):
                 size = metadata[5:].strip().upper()
                 if current_task:
                     # Normalize size value
-                    if size in ('SMALL', 'MEDIUM', 'LARGE', 'UNDEFINED'):
-                        size_map = {'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L', 'UNDEFINED': 'U'}
-                        current_task['size'] = size_map[size]
-                    elif size in ('U', 'S', 'M', 'L'):
-                        current_task['size'] = size
+                    if size in ("SMALL", "MEDIUM", "LARGE", "UNDEFINED"):
+                        size_map = {
+                            "SMALL": "S",
+                            "MEDIUM": "M",
+                            "LARGE": "L",
+                            "UNDEFINED": "U",
+                        }
+                        current_task["size"] = size_map[size]
+                    elif size in ("U", "S", "M", "L"):
+                        current_task["size"] = size
                     # else: keep default 'U'
 
         # List items become individual notes
-        elif line_stripped.startswith('-') or line_stripped.startswith('*'):
+        elif line_stripped.startswith("-") or line_stripped.startswith("*"):
             in_pre_list = False
-            note_text = line_stripped.lstrip('-*').strip()
+            note_text = line_stripped.lstrip("-*").strip()
             if note_text:
                 current_notes.append(note_text)
 
         # Continuation of list items (indented lines after a list item)
-        elif line.startswith('  ') and not in_pre_list and current_notes:
+        elif line.startswith("  ") and not in_pre_list and current_notes:
             # Append to the last note
-            current_notes[-1] += '\n' + line_stripped
+            current_notes[-1] += "\n" + line_stripped
 
         # Regular content before any list (becomes notes[0])
         elif line_stripped and in_pre_list and current_task:
@@ -1614,11 +1779,11 @@ def _parse_markdown_entry(file_path: Path) -> list[dict]:
     if current_task:
         # Add pre-list content as first note if exists
         if pre_list_content:
-            pre_list_note = '\n'.join(pre_list_content).strip()
+            pre_list_note = "\n".join(pre_list_content).strip()
             if pre_list_note:
                 current_notes.insert(0, pre_list_note)
 
-        current_task['notes'] = current_notes if current_notes else []
+        current_task["notes"] = current_notes if current_notes else []
         tasks.append(current_task)
 
     return tasks
@@ -1650,14 +1815,15 @@ def import_tasks(
     tasks_data = []
 
     # Parse based on file extension
-    if file_path.suffix == '.md':
+    if file_path.suffix == ".md":
         console.print(f"[cyan]Parsing markdown file: {filename}[/cyan]")
         tasks_data = _parse_markdown_entry(file_path)
 
-    elif file_path.suffix == '.json':
+    elif file_path.suffix == ".json":
         console.print(f"[cyan]Parsing JSON file: {filename}[/cyan]")
         try:
             import json as json_module
+
             with open(file_path) as f:
                 tasks_data = json_module.load(f)
         except json.JSONDecodeError as e:
@@ -1681,13 +1847,13 @@ def import_tasks(
     updated_count = 0
 
     for task_data in tasks_data:
-        task_name = task_data.get('name')
+        task_name = task_data.get("name")
         if not task_name:
             console.print("[yellow]Skipping task without name[/yellow]")
             continue
 
         # Check if this is an update (has 'id' field)
-        task_id = task_data.get('id')
+        task_id = task_data.get("id")
 
         if task_id:
             # Update existing task (including soft-deleted ones)
@@ -1697,7 +1863,7 @@ def import_tasks(
                 # Parse reminder if provided
                 reminder_timestamp = None
                 reminder_repeat = None
-                reminder_text = task_data.get('reminder')
+                reminder_text = task_data.get("reminder")
                 if reminder_text:
                     parsed_dt, error, repeat_interval = parse_reminder(reminder_text)
                     if not error:
@@ -1707,15 +1873,15 @@ def import_tasks(
                 # Update task fields and undelete if necessary
                 existing_task.update_record(
                     name=task_name,
-                    tag=task_data.get('tag', 'default'),
-                    status=task_data.get('status', 'new'),
+                    tag=task_data.get("tag", "default"),
+                    status=task_data.get("status", "new"),
                     reminder=reminder_text,
                     reminder_timestamp=reminder_timestamp,
                     reminder_repeat=reminder_repeat,
-                    notes=task_data.get('notes', []),
-                    priority=task_data.get('priority', 0),
-                    size=task_data.get('size', 'U'),
-                    deleted=False  # Undelete the task when importing
+                    notes=task_data.get("notes", []),
+                    priority=task_data.get("priority", 0),
+                    size=task_data.get("size", "U"),
+                    deleted=False,  # Undelete the task when importing
                 )
                 db.commit()
                 console.print(f"[green]✓ Updated task {task_id}: {task_name}[/green]")
@@ -1724,7 +1890,7 @@ def import_tasks(
                 console.print(f"[yellow]Task {task_id} not found, skipping[/yellow]")
         else:
             # Create new task
-            reminder_text = task_data.get('reminder')
+            reminder_text = task_data.get("reminder")
             reminder_timestamp = None
             reminder_repeat = None
             if reminder_text:
@@ -1735,27 +1901,29 @@ def import_tasks(
 
             new_task_id = tasks.insert(
                 name=task_name,
-                tag=task_data.get('tag', 'default'),
-                status=task_data.get('status', 'new'),
+                tag=task_data.get("tag", "default"),
+                status=task_data.get("status", "new"),
                 reminder=reminder_text,
                 reminder_timestamp=reminder_timestamp,
                 reminder_repeat=reminder_repeat,
-                notes=task_data.get('notes', []),
-                priority=task_data.get('priority', 0),
-                size=task_data.get('size', 'U'),
-                created_on=datetime.datetime.now()
+                notes=task_data.get("notes", []),
+                priority=task_data.get("priority", 0),
+                size=task_data.get("size", "U"),
+                created_on=datetime.datetime.now(),
             )
             db.commit()
             console.print(f"[green]✓ Created task {new_task_id}: {task_name}[/green]")
             created_count += 1
 
     # Summary
-    console.print(f"\n[bold cyan]Import Summary:[/bold cyan]")
+    console.print("\n[bold cyan]Import Summary:[/bold cyan]")
     if created_count > 0:
         console.print(f"  [green]Created: {created_count} task(s)[/green]")
     if updated_count > 0:
         console.print(f"  [green]Updated: {updated_count} task(s)[/green]")
-    console.print(f"  [cyan]Total processed: {created_count + updated_count} task(s)[/cyan]")
+    console.print(
+        f"  [cyan]Total processed: {created_count + updated_count} task(s)[/cyan]"
+    )
 
 
 def main_entry():
@@ -1763,5 +1931,5 @@ def main_entry():
     app()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main_entry()

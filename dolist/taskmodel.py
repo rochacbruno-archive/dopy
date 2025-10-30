@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 
 from datetime import datetime
 from typing import Optional
@@ -9,17 +9,18 @@ from .dependency import parse_dependencies, get_dependency_display_info
 
 class Task(BaseModel):
     """To show the task
->>> print task
-To show a field (available name, tag, status, reminder, priority, size)
->>> task.name
-To edit the task assign to a field
->>> task.name = "Other name"
-To delete a task
->>> task.delete()
-To exit
->>> quit()
-######################################
-"""
+    >>> print task
+    To show a field (available name, tag, status, reminder, priority, size)
+    >>> task.name
+    To edit the task assign to a field
+    >>> task.name = "Other name"
+    To delete a task
+    >>> task.delete()
+    To exit
+    >>> quit()
+    ######################################
+    """
+
     id: Optional[int] = None
     name: str
     tag: str = "default"
@@ -41,16 +42,16 @@ To exit
         "from_attributes": True,
     }
 
-    @field_validator('status')
+    @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
         """Validate that status is one of the allowed values."""
-        valid_statuses = {'new', 'in-progress', 'done', 'cancel', 'post'}
+        valid_statuses = {"new", "in-progress", "done", "cancel", "post"}
         if v not in valid_statuses:
             raise ValueError(f"Status must be one of {valid_statuses}")
         return v
 
-    @field_validator('size')
+    @field_validator("size")
     @classmethod
     def validate_size(cls, v: str) -> str:
         """Validate and normalize size field."""
@@ -58,19 +59,16 @@ To exit
             return "U"
         # Normalize to uppercase first letter
         v_upper = v.upper()
-        if v_upper in ('U', 'S', 'M', 'L'):
+        if v_upper in ("U", "S", "M", "L"):
             return v_upper
         # Handle full words (case insensitive)
-        size_map = {
-            'SMALL': 'S',
-            'MEDIUM': 'M',
-            'LARGE': 'L',
-            'UNDEFINED': 'U'
-        }
+        size_map = {"SMALL": "S", "MEDIUM": "M", "LARGE": "L", "UNDEFINED": "U"}
         normalized = size_map.get(v_upper)
         if normalized:
             return normalized
-        raise ValueError(f"Size must be one of: U, S, M, L (or Small, Medium, Large, Undefined)")
+        raise ValueError(
+            "Size must be one of: U, S, M, L (or Small, Medium, Large, Undefined)"
+        )
         return v
 
     @classmethod
@@ -82,12 +80,12 @@ To exit
             tag=row.tag,
             status=row.status,
             reminder=row.reminder,
-            reminder_repeat=row.get('reminder_repeat', None),
+            reminder_repeat=row.get("reminder_repeat", None),
             notes=row.notes or [],
             created_on=row.created_on,
             deleted=row.deleted,
-            priority=row.get('priority', 0),
-            size=row.get('size', 'U'),
+            priority=row.get("priority", 0),
+            size=row.get("size", "U"),
         )
         task._db = db
         task._row = row

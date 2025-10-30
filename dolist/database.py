@@ -19,7 +19,7 @@ class Row:
 
     def __getattr__(self, key):
         """Allow attribute access like row.id"""
-        if key.startswith('_'):
+        if key.startswith("_"):
             return object.__getattribute__(self, key)
         try:
             return self._data[key]
@@ -62,7 +62,7 @@ class Row:
 
     def update_record(self, **fields):
         """Update this row in the database."""
-        if not hasattr(self, '_db') or not hasattr(self, '_table'):
+        if not hasattr(self, "_db") or not hasattr(self, "_table"):
             raise RuntimeError("Row is not bound to a database table")
 
         if not fields:
@@ -79,9 +79,9 @@ class Row:
                 processed_fields[key] = value
 
         # Build UPDATE query
-        set_clause = ', '.join(f"{k} = ?" for k in processed_fields.keys())
+        set_clause = ", ".join(f"{k} = ?" for k in processed_fields.keys())
         query = f"UPDATE {self._table} SET {set_clause} WHERE id = ?"
-        values = list(processed_fields.values()) + [self._data['id']]
+        values = list(processed_fields.values()) + [self._data["id"]]
 
         self._db.execute(query, values)
 
@@ -91,7 +91,7 @@ class Row:
 
     def delete_record(self):
         """Delete this row from the database (soft delete)."""
-        if not hasattr(self, '_db') or not hasattr(self, '_table'):
+        if not hasattr(self, "_db") or not hasattr(self, "_table"):
             raise RuntimeError("Row is not bound to a database table")
 
         self.update_record(deleted=True)
@@ -108,15 +108,13 @@ class Table:
     def __getattr__(self, name):
         """Return a Field object for query building."""
         # 'id' is always available as it's the primary key
-        if name == 'id' or name in self._fields:
+        if name == "id" or name in self._fields:
             return Field(self, name)
         raise AttributeError(f"Table has no field '{name}'")
 
     def __getitem__(self, id):
         """Get a row by ID."""
-        cursor = self.db.conn.execute(
-            f"SELECT * FROM {self._name} WHERE id = ?", (id,)
-        )
+        cursor = self.db.conn.execute(f"SELECT * FROM {self._name} WHERE id = ?", (id,))
         row_data = cursor.fetchone()
         if row_data:
             row = self._make_row(row_data, cursor.description)
@@ -135,8 +133,8 @@ class Table:
             else:
                 processed_fields[key] = value
 
-        columns = ', '.join(processed_fields.keys())
-        placeholders = ', '.join('?' * len(processed_fields))
+        columns = ", ".join(processed_fields.keys())
+        placeholders = ", ".join("?" * len(processed_fields))
         query = f"INSERT INTO {self._name} ({columns}) VALUES ({placeholders})"
 
         cursor = self.db.conn.execute(query, list(processed_fields.values()))
@@ -153,19 +151,21 @@ class Table:
 
         for col_name, value in zip(col_names, row_data):
             # Handle JSON-encoded list:string fields
-            if col_name == 'notes' and value:
+            if col_name == "notes" and value:
                 try:
                     data[col_name] = json.loads(value) if value else []
                 except (json.JSONDecodeError, TypeError):
                     data[col_name] = []
             # Handle datetime fields
-            elif col_name in ('created_on', 'reminder_timestamp', 'changed_at') and value:
+            elif (
+                col_name in ("created_on", "reminder_timestamp", "changed_at") and value
+            ):
                 try:
                     data[col_name] = datetime.fromisoformat(value)
                 except (ValueError, TypeError):
                     data[col_name] = value
             # Handle boolean fields
-            elif col_name == 'deleted':
+            elif col_name == "deleted":
                 data[col_name] = bool(value) if value is not None else False
             else:
                 data[col_name] = value
@@ -185,35 +185,35 @@ class Field:
 
     def __eq__(self, value):
         """Build equality condition."""
-        return Condition(self, '=', value)
+        return Condition(self, "=", value)
 
     def __ne__(self, value):
         """Build inequality condition."""
-        return Condition(self, '!=', value)
+        return Condition(self, "!=", value)
 
     def __gt__(self, value):
         """Build greater than condition."""
-        return Condition(self, '>', value)
+        return Condition(self, ">", value)
 
     def __lt__(self, value):
         """Build less than condition."""
-        return Condition(self, '<', value)
+        return Condition(self, "<", value)
 
     def __le__(self, value):
         """Build less than or equal condition."""
-        return Condition(self, '<=', value)
+        return Condition(self, "<=", value)
 
     def __ge__(self, value):
         """Build greater than or equal condition."""
-        return Condition(self, '>=', value)
+        return Condition(self, ">=", value)
 
     def belongs(self, values):
         """Build IN condition."""
-        return Condition(self, 'IN', values)
+        return Condition(self, "IN", values)
 
     def like(self, pattern):
         """Build LIKE condition."""
-        return Condition(self, 'LIKE', pattern)
+        return Condition(self, "LIKE", pattern)
 
 
 class Condition:
@@ -226,11 +226,11 @@ class Condition:
 
     def __and__(self, other):
         """Combine conditions with AND."""
-        return CompoundCondition(self, 'AND', other)
+        return CompoundCondition(self, "AND", other)
 
     def __or__(self, other):
         """Combine conditions with OR."""
-        return CompoundCondition(self, 'OR', other)
+        return CompoundCondition(self, "OR", other)
 
     def __invert__(self):
         """Negate condition with NOT."""
@@ -240,30 +240,36 @@ class Condition:
         """Convert to SQL WHERE clause and parameters."""
         # Handle NULL comparisons
         if self.value is None:
-            if self.operator == '=':
+            if self.operator == "=":
                 return f"{self.field.name} IS NULL", []
-            elif self.operator == '!=' or self.operator == '<>':
+            elif self.operator == "!=" or self.operator == "<>":
                 return f"{self.field.name} IS NOT NULL", []
 
-        if self.operator == 'IN':
-            placeholders = ', '.join('?' * len(self.value))
+        if self.operator == "IN":
+            placeholders = ", ".join("?" * len(self.value))
             return f"{self.field.name} IN ({placeholders})", list(self.value)
         else:
             # Handle boolean comparisons specially
             # For deleted != True, we want (deleted IS NULL OR deleted != 1 OR deleted = 'F')
-            if self.field.name == 'deleted' and isinstance(self.value, bool):
-                if self.operator == '!=' and self.value is True:
+            if self.field.name == "deleted" and isinstance(self.value, bool):
+                if self.operator == "!=" and self.value is True:
                     # Find non-deleted: NULL, 0, False, 'F'
-                    return f"({self.field.name} IS NULL OR {self.field.name} = 0 OR {self.field.name} = 'F')", []
-                elif self.operator == '=' and self.value is True:
+                    return (
+                        f"({self.field.name} IS NULL OR {self.field.name} = 0 OR {self.field.name} = 'F')",
+                        [],
+                    )
+                elif self.operator == "=" and self.value is True:
                     # Find deleted: 1, True, 'T'
                     return f"({self.field.name} = 1 OR {self.field.name} = 'T')", []
-                elif self.operator == '!=' and self.value is False:
+                elif self.operator == "!=" and self.value is False:
                     # Find deleted
                     return f"({self.field.name} = 1 OR {self.field.name} = 'T')", []
-                elif self.operator == '=' and self.value is False:
+                elif self.operator == "=" and self.value is False:
                     # Find non-deleted
-                    return f"({self.field.name} IS NULL OR {self.field.name} = 0 OR {self.field.name} = 'F')", []
+                    return (
+                        f"({self.field.name} IS NULL OR {self.field.name} = 0 OR {self.field.name} = 'F')",
+                        [],
+                    )
 
             # Convert boolean to integer for SQLite
             value = self.value
@@ -285,10 +291,10 @@ class CompoundCondition:
         self.right = right
 
     def __and__(self, other):
-        return CompoundCondition(self, 'AND', other)
+        return CompoundCondition(self, "AND", other)
 
     def __or__(self, other):
-        return CompoundCondition(self, 'OR', other)
+        return CompoundCondition(self, "OR", other)
 
     def __invert__(self):
         return NotCondition(self)
@@ -308,10 +314,10 @@ class NotCondition:
         self.condition = condition
 
     def __and__(self, other):
-        return CompoundCondition(self, 'AND', other)
+        return CompoundCondition(self, "AND", other)
 
     def __or__(self, other):
-        return CompoundCondition(self, 'OR', other)
+        return CompoundCondition(self, "OR", other)
 
     def to_sql(self):
         """Convert to SQL WHERE clause and parameters."""
@@ -358,7 +364,7 @@ class Query:
             else:
                 processed_fields[key] = value
 
-        set_clause = ', '.join(f"{k} = ?" for k in processed_fields.keys())
+        set_clause = ", ".join(f"{k} = ?" for k in processed_fields.keys())
         where_clause, where_params = self.condition.to_sql()
 
         query = f"UPDATE {self.table._name} SET {set_clause} WHERE {where_clause}"
@@ -375,7 +381,7 @@ class Query:
 class Database:
     """Simple SQLite database wrapper."""
 
-    def __init__(self, uri, folder='.', run_migrations=True):
+    def __init__(self, uri, folder=".", run_migrations=True):
         """
         Initialize database connection.
 
@@ -385,14 +391,14 @@ class Database:
             run_migrations: If True, run database migrations on init
         """
         # Parse URI
-        if uri.startswith('sqlite://'):
-            db_file = uri.replace('sqlite://', '')
+        if uri.startswith("sqlite://"):
+            db_file = uri.replace("sqlite://", "")
         else:
             db_file = uri
 
         # Handle in-memory database special case
-        if db_file == ':memory:':
-            db_path = ':memory:'
+        if db_file == ":memory:":
+            db_path = ":memory:"
         else:
             db_path = os.path.join(folder, db_file)
 
@@ -400,8 +406,9 @@ class Database:
         self.tables = {}
 
         # Run migrations if requested and not in-memory database
-        if run_migrations and db_path != ':memory:':
+        if run_migrations and db_path != ":memory:":
             from .migrations import run_migrations
+
             run_migrations(self.conn)
 
     def define_table(self, name, *fields, **kwargs):
@@ -416,40 +423,40 @@ class Database:
             Table object
         """
         # Create table if it doesn't exist
-        field_defs = ['id INTEGER PRIMARY KEY AUTOINCREMENT']
+        field_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
 
         field_map = {}
         for field in fields:
-            if hasattr(field, 'name') and hasattr(field, 'type'):
+            if hasattr(field, "name") and hasattr(field, "type"):
                 field_name = field.name
                 field_type = field.type
                 field_map[field_name] = field_type
 
                 # Map DAL types to SQLite types
-                if field_type == 'string':
-                    sql_type = 'TEXT'
-                elif field_type == 'integer':
-                    sql_type = 'INTEGER'
-                elif field_type == 'boolean':
-                    sql_type = 'INTEGER'  # SQLite uses 0/1 for boolean
-                elif field_type == 'datetime':
-                    sql_type = 'TEXT'  # Store as ISO format
-                elif field_type == 'list:string':
-                    sql_type = 'TEXT'  # Store as JSON
+                if field_type == "string":
+                    sql_type = "TEXT"
+                elif field_type == "integer":
+                    sql_type = "INTEGER"
+                elif field_type == "boolean":
+                    sql_type = "INTEGER"  # SQLite uses 0/1 for boolean
+                elif field_type == "datetime":
+                    sql_type = "TEXT"  # Store as ISO format
+                elif field_type == "list:string":
+                    sql_type = "TEXT"  # Store as JSON
                 else:
-                    sql_type = 'TEXT'
+                    sql_type = "TEXT"
 
                 # Handle default values
-                default = ''
-                if hasattr(field, 'default') and field.default is not None:
+                default = ""
+                if hasattr(field, "default") and field.default is not None:
                     if field.default is False:
-                        default = ' DEFAULT 0'
+                        default = " DEFAULT 0"
                     elif field.default is True:
-                        default = ' DEFAULT 1'
+                        default = " DEFAULT 1"
                     elif isinstance(field.default, str):
                         default = f" DEFAULT '{field.default}'"
                     else:
-                        default = f' DEFAULT {field.default}'
+                        default = f" DEFAULT {field.default}"
 
                 field_defs.append(f"{field_name} {sql_type}{default}")
 
@@ -475,7 +482,9 @@ class Database:
         if isinstance(condition, Condition):
             return condition.field.table
         elif isinstance(condition, (CompoundCondition, NotCondition)):
-            return self._get_table_from_condition(condition.left if hasattr(condition, 'left') else condition.condition)
+            return self._get_table_from_condition(
+                condition.left if hasattr(condition, "left") else condition.condition
+            )
         return None
 
     def commit(self):
@@ -495,7 +504,7 @@ class Database:
 class FieldDef:
     """Field definition for table creation."""
 
-    def __init__(self, name, type='string', default=None, **kwargs):
+    def __init__(self, name, type="string", default=None, **kwargs):
         self.name = name
         self.type = type
         self.default = default

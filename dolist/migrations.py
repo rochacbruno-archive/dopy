@@ -5,7 +5,6 @@ Database migration system for DoList.
 Handles schema changes and data migrations for existing databases.
 """
 import sqlite3
-from pathlib import Path
 
 
 def get_schema_version(db_conn):
@@ -24,18 +23,20 @@ def get_schema_version(db_conn):
 def set_schema_version(db_conn, version):
     """Set the schema version in the database."""
     # Create version table if it doesn't exist
-    db_conn.execute("""
+    db_conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS dolist_schema_version (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             version INTEGER NOT NULL,
             applied_at TEXT NOT NULL
         )
-    """)
+    """
+    )
 
     # Insert new version record
     db_conn.execute(
         "INSERT INTO dolist_schema_version (version, applied_at) VALUES (?, datetime('now'))",
-        (version,)
+        (version,),
     )
     db_conn.commit()
 
@@ -65,16 +66,18 @@ def migrate_to_v1_priority_and_size(db_conn):
         return  # Table doesn't exist yet, skip migration
 
     # Check if migration is needed
-    if column_exists(db_conn, 'dolist_tasks', 'priority'):
+    if column_exists(db_conn, "dolist_tasks", "priority"):
         return  # Already migrated
 
     print("Running migration v1: Adding priority and size fields...")
 
     # Add columns to dolist_tasks
-    if not column_exists(db_conn, 'dolist_tasks', 'priority'):
-        db_conn.execute("ALTER TABLE dolist_tasks ADD COLUMN priority INTEGER DEFAULT 0")
+    if not column_exists(db_conn, "dolist_tasks", "priority"):
+        db_conn.execute(
+            "ALTER TABLE dolist_tasks ADD COLUMN priority INTEGER DEFAULT 0"
+        )
 
-    if not column_exists(db_conn, 'dolist_tasks', 'size'):
+    if not column_exists(db_conn, "dolist_tasks", "size"):
         db_conn.execute("ALTER TABLE dolist_tasks ADD COLUMN size TEXT DEFAULT 'U'")
 
     # Add columns to dolist_task_history if it exists
@@ -82,11 +85,15 @@ def migrate_to_v1_priority_and_size(db_conn):
         "SELECT name FROM sqlite_master WHERE type='table' AND name='dolist_task_history'"
     )
     if cursor.fetchone():
-        if not column_exists(db_conn, 'dolist_task_history', 'priority'):
-            db_conn.execute("ALTER TABLE dolist_task_history ADD COLUMN priority INTEGER DEFAULT 0")
+        if not column_exists(db_conn, "dolist_task_history", "priority"):
+            db_conn.execute(
+                "ALTER TABLE dolist_task_history ADD COLUMN priority INTEGER DEFAULT 0"
+            )
 
-        if not column_exists(db_conn, 'dolist_task_history', 'size'):
-            db_conn.execute("ALTER TABLE dolist_task_history ADD COLUMN size TEXT DEFAULT 'U'")
+        if not column_exists(db_conn, "dolist_task_history", "size"):
+            db_conn.execute(
+                "ALTER TABLE dolist_task_history ADD COLUMN size TEXT DEFAULT 'U'"
+            )
 
     db_conn.commit()
     set_schema_version(db_conn, 1)
@@ -109,13 +116,13 @@ def migrate_to_v2_recurring_reminders(db_conn):
         return  # Table doesn't exist yet, skip migration
 
     # Check if migration is needed
-    if column_exists(db_conn, 'dolist_tasks', 'reminder_repeat'):
+    if column_exists(db_conn, "dolist_tasks", "reminder_repeat"):
         return  # Already migrated
 
     print("Running migration v2: Adding recurring reminder support...")
 
     # Add reminder_repeat column to dolist_tasks
-    if not column_exists(db_conn, 'dolist_tasks', 'reminder_repeat'):
+    if not column_exists(db_conn, "dolist_tasks", "reminder_repeat"):
         db_conn.execute("ALTER TABLE dolist_tasks ADD COLUMN reminder_repeat TEXT")
 
     # Add reminder_repeat column to dolist_task_history if it exists
@@ -123,8 +130,10 @@ def migrate_to_v2_recurring_reminders(db_conn):
         "SELECT name FROM sqlite_master WHERE type='table' AND name='dolist_task_history'"
     )
     if cursor.fetchone():
-        if not column_exists(db_conn, 'dolist_task_history', 'reminder_repeat'):
-            db_conn.execute("ALTER TABLE dolist_task_history ADD COLUMN reminder_repeat TEXT")
+        if not column_exists(db_conn, "dolist_task_history", "reminder_repeat"):
+            db_conn.execute(
+                "ALTER TABLE dolist_task_history ADD COLUMN reminder_repeat TEXT"
+            )
 
     db_conn.commit()
     set_schema_version(db_conn, 2)

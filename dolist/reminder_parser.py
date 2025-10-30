@@ -17,54 +17,46 @@ import re
 # Abbreviation mappings
 UNIT_ABBREV = {
     # Seconds
-    'sec': 'seconds',
-    'secs': 'seconds',
-    's': 'seconds',
-    'second': 'seconds',
-
+    "sec": "seconds",
+    "secs": "seconds",
+    "s": "seconds",
+    "second": "seconds",
     # Minutes
-    'min': 'minutes',
-    'mins': 'minutes',
-    'm': 'minutes',
-    'minute': 'minutes',
-
+    "min": "minutes",
+    "mins": "minutes",
+    "m": "minutes",
+    "minute": "minutes",
     # Hours
-    'hr': 'hours',
-    'hrs': 'hours',
-    'h': 'hours',
-    'ho': 'hours',
-    'hour': 'hours',
-
+    "hr": "hours",
+    "hrs": "hours",
+    "h": "hours",
+    "ho": "hours",
+    "hour": "hours",
     # Days
-    'd': 'days',
-    'day': 'days',
-
+    "d": "days",
+    "day": "days",
     # Weeks
-    'w': 'weeks',
-    'wk': 'weeks',
-    'wks': 'weeks',
-    'week': 'weeks',
-
+    "w": "weeks",
+    "wk": "weeks",
+    "wks": "weeks",
+    "week": "weeks",
     # Months
-    'mo': 'months',
-    'mon': 'months',
-    'mos': 'months',
-    'month': 'months',
-
+    "mo": "months",
+    "mon": "months",
+    "mos": "months",
+    "month": "months",
     # Quarters (3 months)
-    'q': 'quarters',
-    'qtr': 'quarters',
-    'quarter': 'quarters',
-
+    "q": "quarters",
+    "qtr": "quarters",
+    "quarter": "quarters",
     # Years
-    'y': 'years',
-    'yr': 'years',
-    'yrs': 'years',
-    'year': 'years',
-
+    "y": "years",
+    "yr": "years",
+    "yrs": "years",
+    "year": "years",
     # Decades
-    'decade': 'decades',
-    'decades': 'decades',
+    "decade": "decades",
+    "decades": "decades",
 }
 
 
@@ -80,14 +72,26 @@ def normalize_unit(unit: str) -> Optional[str]:
     unit_lower = unit.lower().strip()
 
     # Check if already normalized
-    if unit_lower in ['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'quarters', 'years', 'decades']:
+    if unit_lower in [
+        "seconds",
+        "minutes",
+        "hours",
+        "days",
+        "weeks",
+        "months",
+        "quarters",
+        "years",
+        "decades",
+    ]:
         return unit_lower
 
     # Check abbreviations
     return UNIT_ABBREV.get(unit_lower)
 
 
-def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Optional[datetime], Optional[str], Optional[str]]:
+def parse_reminder(
+    text: str, base_time: Optional[datetime] = None
+) -> Tuple[Optional[datetime], Optional[str], Optional[str]]:
     """Parse reminder text into a datetime and optional repeat interval.
 
     Args:
@@ -108,13 +112,13 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
 
     # Check for "repeat" keyword at the end
     repeat_interval = None
-    if text.endswith(' repeat'):
+    if text.endswith(" repeat"):
         # Extract the repeat interval (everything before "repeat")
         text = text[:-7].strip()  # Remove " repeat"
         repeat_interval = text  # Store the interval for recurring reminders
 
     # Special cases
-    if text == 'today':
+    if text == "today":
         # Today at 15:00 (3 PM)
         result = base.replace(hour=15, minute=0, second=0, microsecond=0)
         if result <= base:
@@ -122,38 +126,40 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
             result = result + timedelta(days=1)
         return result, None, repeat_interval
 
-    if text == 'tomorrow':
+    if text == "tomorrow":
         # Tomorrow at 9:00 AM
-        result = base.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        result = base.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(
+            days=1
+        )
         return result, None, repeat_interval
 
     # Pattern: "next <unit>"
-    next_match = re.match(r'^next\s+(\w+)$', text)
+    next_match = re.match(r"^next\s+(\w+)$", text)
     if next_match:
         unit = next_match.group(1)
         normalized = normalize_unit(unit)
 
-        if normalized == 'hours':
+        if normalized == "hours":
             return base + timedelta(hours=1), None, repeat_interval
-        elif normalized == 'days':
+        elif normalized == "days":
             return base + timedelta(days=1), None, repeat_interval
-        elif normalized == 'weeks':
+        elif normalized == "weeks":
             return base + timedelta(weeks=1), None, repeat_interval
-        elif normalized == 'months':
+        elif normalized == "months":
             # Approximate as 30 days
             return base + timedelta(days=30), None, repeat_interval
-        elif normalized == 'quarters':
+        elif normalized == "quarters":
             # 3 months ≈ 90 days
             return base + timedelta(days=90), None, repeat_interval
-        elif normalized == 'years':
+        elif normalized == "years":
             return base + timedelta(days=365), None, repeat_interval
-        elif normalized == 'decades':
+        elif normalized == "decades":
             return base + timedelta(days=3650), None, repeat_interval
         else:
             return None, f"Unknown unit in 'next {unit}'", None
 
     # Pattern: "<number> <unit>"
-    number_match = re.match(r'^(\d+)\s+([a-zA-Z]+)$', text)
+    number_match = re.match(r"^(\d+)\s+([a-zA-Z]+)$", text)
     if number_match:
         try:
             amount = int(number_match.group(1))
@@ -163,25 +169,25 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
             if not normalized:
                 return None, f"Unknown time unit: {unit}", None
 
-            if normalized == 'seconds':
+            if normalized == "seconds":
                 return base + timedelta(seconds=amount), None, repeat_interval
-            elif normalized == 'minutes':
+            elif normalized == "minutes":
                 return base + timedelta(minutes=amount), None, repeat_interval
-            elif normalized == 'hours':
+            elif normalized == "hours":
                 return base + timedelta(hours=amount), None, repeat_interval
-            elif normalized == 'days':
+            elif normalized == "days":
                 return base + timedelta(days=amount), None, repeat_interval
-            elif normalized == 'weeks':
+            elif normalized == "weeks":
                 return base + timedelta(weeks=amount), None, repeat_interval
-            elif normalized == 'months':
+            elif normalized == "months":
                 # Approximate as 30 days per month
                 return base + timedelta(days=amount * 30), None, repeat_interval
-            elif normalized == 'quarters':
+            elif normalized == "quarters":
                 # 3 months per quarter
                 return base + timedelta(days=amount * 90), None, repeat_interval
-            elif normalized == 'years':
+            elif normalized == "years":
                 return base + timedelta(days=amount * 365), None, repeat_interval
-            elif normalized == 'decades':
+            elif normalized == "decades":
                 return base + timedelta(days=amount * 3650), None, repeat_interval
             else:
                 return None, f"Unsupported unit: {normalized}", None

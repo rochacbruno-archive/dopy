@@ -5,14 +5,13 @@
 from rich.console import Console
 from rich.table import Table
 from rich import box
-from rich.text import Text
 import re
 
 
 def strip_ansi(text):
     """Remove ANSI escape codes from text."""
-    ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
-    return ansi_escape.sub('', str(text))
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_escape.sub("", str(text))
 
 
 def print_table(rows, title=None):
@@ -43,10 +42,10 @@ def print_table(rows, title=None):
         clean_header = strip_ansi(header)
         # Only ID column should be strictly no_wrap to prevent weird formatting
         # Let other columns wrap naturally
-        if clean_header == 'ID':
-            table.add_column(clean_header, style='white', justify='right', no_wrap=True)
+        if clean_header == "ID":
+            table.add_column(clean_header, style="white", justify="right", no_wrap=True)
         else:
-            table.add_column(clean_header, style='white')
+            table.add_column(clean_header, style="white")
 
     # Add data rows, stripping ANSI codes
     for row in rows[1:]:
