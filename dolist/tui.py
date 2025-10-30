@@ -1567,7 +1567,7 @@ class DoListTUI(App):
     def action_edit_task(self) -> None:
         """Edit the selected task."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is not None:
+        if table.cursor_row is not None and table.row_count > 0:
             row_key = table.get_row_at(table.cursor_row)[0]
             # Extract numeric ID from display (might be "✓ 123" or just "123")
             task_id = int(row_key.split()[-1] if '✓' in row_key else row_key)
@@ -1590,7 +1590,7 @@ class DoListTUI(App):
                     tasks_to_delete.append(task_row)
         else:
             # Use current cursor task
-            if table.cursor_row is None:
+            if table.cursor_row is None or table.row_count == 0:
                 self.notify("No task selected", severity="warning")
                 return
 
@@ -1645,7 +1645,7 @@ class DoListTUI(App):
                     tasks_to_cycle.append(task_row)
         else:
             # Use current cursor task
-            if table.cursor_row is None:
+            if table.cursor_row is None or table.row_count == 0:
                 self.notify("No task selected", severity="warning")
                 return
 
@@ -1704,7 +1704,7 @@ class DoListTUI(App):
     def action_toggle_selection(self) -> None:
         """Toggle selection of the current task using space bar."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is None:
+        if table.cursor_row is None or table.row_count == 0:
             return
 
         # Get the task ID from the row key (not the displayed value)
@@ -1776,7 +1776,7 @@ class DoListTUI(App):
     def action_view_history(self) -> None:
         """View history for the selected task."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is None:
+        if table.cursor_row is None or not table.rows:
             self.notify("No task selected", severity="warning")
             return
 
@@ -1794,7 +1794,7 @@ class DoListTUI(App):
     def action_goto_parent(self) -> None:
         """Navigate to parent task (if current task has dependency)."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is None:
+        if table.cursor_row is None or not table.rows:
             self.notify("No task selected", severity="warning")
             return
 
@@ -1829,7 +1829,7 @@ class DoListTUI(App):
     def action_show_children(self) -> None:
         """Show children tasks (tasks that depend on or are under current task)."""
         table = self.query_one("#tasks_table", DataTable)
-        if table.cursor_row is None:
+        if table.cursor_row is None or not table.rows:
             self.notify("No task selected", severity="warning")
             return
 

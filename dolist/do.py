@@ -1194,9 +1194,8 @@ def ls(
         # Apply color based on dependency type
         if dep_info['prefix_type'] == 'blocked':
             # Red-ish for blocked tasks
-            from .colors import redbold
-            row._name_display = redbold(name_text)
-            row._status_display = redbold("blocked")
+            row._name_display = REDBOLD(name_text)
+            row._status_display = REDBOLD("blocked")
         elif dep_info['prefix_type'] == 'under':
             # Yellow-ish for under tasks
             from termcolor import colored
