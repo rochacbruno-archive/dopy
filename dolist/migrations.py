@@ -4,6 +4,7 @@
 Database migration system for DoList.
 Handles schema changes and data migrations for existing databases.
 """
+
 import sqlite3
 
 

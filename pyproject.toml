@@ -47,15 +47,17 @@ dolist = "dolist.do:main_entry"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["dolist"]
 
 [dependency-groups]
 dev = [
     "pytest>=7.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
+    "poethepoet>=0.37.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["dolist"]
 
 [tool.pytest.ini_options]
 # Pytest configuration
@@ -91,3 +93,15 @@ console_output_style = "progress"
 
 # Don't search these directories
 norecursedirs = [".git", ".venv", "__pycache__", "*.egg-info", "build", "dist"]
+
+
+[tool.poe]
+executor.type = "uv"
+
+[tool.poe.tasks]
+test = "pytest tests -sv"
+lint = "ruff check dolist tests"
+format = "ruff format dolist tests"
+docs = "pdoc --docformat markdown --docformat google dolist -o docs"
+serve = "pdoc --docformat markdown --docformat google dolist"
+

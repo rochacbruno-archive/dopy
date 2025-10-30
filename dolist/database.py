@@ -4,6 +4,7 @@
 Simple SQLite database wrapper for dopy.
 Replaces the heavy web2py DAL with a lightweight solution.
 """
+
 import sqlite3
 import json
 import os

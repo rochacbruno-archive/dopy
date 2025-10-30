@@ -3,6 +3,7 @@
 
 from termcolor import colored
 
+
 def HEAD(s):
     return colored(s, attrs=["bold"])
 

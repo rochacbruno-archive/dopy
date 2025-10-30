@@ -1,4 +1,5 @@
 """Tests for do.py module functions."""
+
 import pytest
 import os
 import tempfile
@@ -10,54 +11,54 @@ from datetime import datetime
 class TestDatabaseFunction:
     """Test the database() function."""
 
-    @patch('dolist.do.Database')
+    @patch("dolist.do.Database")
     def test_database_creates_dal_instance(self, mock_database_class):
         """Test that database() creates a Database instance."""
         from dolist.do import database, DBDIR
 
         mock_db = Mock()
         mock_database_class.return_value = mock_db
-        mock_db.define_table = Mock(return_value='tasks_table')
+        mock_db.define_table = Mock(return_value="tasks_table")
 
-        db, tasks, history = database('sqlite://test.db')
+        db, tasks, history = database("sqlite://test.db")
 
         # Should create Database with correct parameters
-        mock_database_class.assert_called_once_with('sqlite://test.db', folder=DBDIR)
+        mock_database_class.assert_called_once_with("sqlite://test.db", folder=DBDIR)
         # Should define the tasks table (both tasks and history)
         assert mock_db.define_table.called
         assert db == mock_db
-        assert tasks == 'tasks_table'
-        assert history == 'tasks_table'
+        assert tasks == "tasks_table"
+        assert history == "tasks_table"
 
-    @patch('dolist.do.Database')
+    @patch("dolist.do.Database")
     def test_database_defines_correct_schema(self, mock_database_class):
         """Test that database() defines correct table schema."""
         from dolist.do import database, FieldDef
 
         mock_db = Mock()
         mock_database_class.return_value = mock_db
-        mock_db.define_table = Mock(return_value='tasks_table')
+        mock_db.define_table = Mock(return_value="tasks_table")
 
-        db, tasks, history = database('sqlite://test.db')
+        db, tasks, history = database("sqlite://test.db")
 
         # Check that define_table was called twice (tasks and history)
         assert mock_db.define_table.call_count == 2
 
         # Check the first call was for tasks table
         first_call_args = mock_db.define_table.call_args_list[0]
-        assert first_call_args[0][0] == 'dolist_tasks'
+        assert first_call_args[0][0] == "dolist_tasks"
         # Should have FieldDef objects in the call
         assert len(first_call_args[0]) > 1  # Table name + fields
 
         # Check the second call was for history table
         second_call_args = mock_db.define_table.call_args_list[1]
-        assert second_call_args[0][0] == 'dolist_task_history'
+        assert second_call_args[0][0] == "dolist_task_history"
 
 
 class TestInitDbFunction:
     """Test the init_db() function."""
 
-    @patch('dolist.do.database')
+    @patch("dolist.do.database")
     def test_init_db_default(self, mock_database):
         """Test init_db with default database."""
         import dolist.do
@@ -76,7 +77,7 @@ class TestInitDbFunction:
         assert dolist.do.history == mock_history
         assert dburi == DBURI
 
-    @patch('dolist.do.database')
+    @patch("dolist.do.database")
     def test_init_db_custom(self, mock_database):
         """Test init_db with custom database."""
         import dolist.do
@@ -87,20 +88,20 @@ class TestInitDbFunction:
         mock_history = Mock()
         mock_database.return_value = (mock_db, mock_tasks, mock_history)
 
-        dburi = init_db('customdb')
+        dburi = init_db("customdb")
 
         # Should replace 'dopy' with 'customdb' in URI
         called_uri = mock_database.call_args[0][0]
-        assert 'customdb' in called_uri
-        assert 'customdb' in dburi
+        assert "customdb" in called_uri
+        assert "customdb" in dburi
 
 
 class TestAddCommand:
     """Test the add() command."""
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.datetime')
-    @patch('dolist.do.rprint')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.datetime")
+    @patch("dolist.do.rprint")
     def test_add_basic_task(self, mock_rprint, mock_datetime, mock_init_db):
         """Test adding a basic task."""
         import dolist.do
@@ -119,23 +120,23 @@ class TestAddCommand:
         dolist.do.tasks = mock_tasks
 
         # Call add command
-        add(name='Test task', tag='default', status='new', reminder=None, use=None)
+        add(name="Test task", tag="default", status="new", reminder=None, use=None)
 
         # Should initialize db
         mock_init_db.assert_called_once_with(None)
 
         # Should insert with correct values
         mock_tasks.insert.assert_called_once_with(
-            name='Test task',
-            tag='default',
-            status='new',
+            name="Test task",
+            tag="default",
+            status="new",
             reminder=None,
             reminder_timestamp=None,
             reminder_repeat=None,
             notes=None,
             created_on=mock_now,
             priority=0,
-            size='U'
+            size="U",
         )
 
         # Should commit
@@ -144,9 +145,9 @@ class TestAddCommand:
         # Should print success message
         assert mock_rprint.called
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.datetime')
-    @patch('dolist.do.rprint')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.datetime")
+    @patch("dolist.do.rprint")
     def test_add_task_with_all_fields(self, mock_rprint, mock_datetime, mock_init_db):
         """Test adding a task with all fields specified."""
         import dolist.do
@@ -162,20 +163,26 @@ class TestAddCommand:
         dolist.do.db = mock_db
         dolist.do.tasks = mock_tasks
 
-        add(name='Important task', tag='work', status='working', reminder='tomorrow', use=None)
+        add(
+            name="Important task",
+            tag="work",
+            status="working",
+            reminder="tomorrow",
+            use=None,
+        )
 
         call_kwargs = mock_tasks.insert.call_args[1]
-        assert call_kwargs['name'] == 'Important task'
-        assert call_kwargs['tag'] == 'work'
-        assert call_kwargs['status'] == 'working'
-        assert call_kwargs['reminder'] == 'tomorrow'
+        assert call_kwargs["name"] == "Important task"
+        assert call_kwargs["tag"] == "work"
+        assert call_kwargs["status"] == "working"
+        assert call_kwargs["reminder"] == "tomorrow"
 
 
 class TestRemoveCommand:
     """Test the remove/delete action via default_action."""
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.console')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.console")
     def test_rm_existing_task(self, mock_console, mock_init_db):
         """Test removing an existing task."""
         import dolist.do
@@ -194,7 +201,7 @@ class TestRemoveCommand:
         dolist.do.db = mock_db
         dolist.do.tasks = mock_tasks
 
-        default_action(1, 'delete')
+        default_action(1, "delete")
 
         # Should initialize db
         mock_init_db.assert_called_once_with(None)
@@ -204,8 +211,8 @@ class TestRemoveCommand:
         # Commit is called twice: once for update, once for history
         assert mock_db.commit.call_count >= 1
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.rprint')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.rprint")
     def test_rm_nonexistent_task(self, mock_rprint, mock_init_db):
         """Test removing a non-existent task."""
         import dolist.do
@@ -215,7 +222,7 @@ class TestRemoveCommand:
         mock_tasks.__getitem__ = Mock(return_value=None)
         dolist.do.tasks = mock_tasks
 
-        default_action(999, 'delete')
+        default_action(999, "delete")
 
         # Should print not found message via rprint
         assert mock_rprint.called
@@ -224,8 +231,8 @@ class TestRemoveCommand:
 class TestDoneCommand:
     """Test the done action via default_action."""
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.console')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.console")
     def test_done_existing_task(self, mock_console, mock_init_db):
         """Test marking an existing task as done."""
         import dolist.do
@@ -243,14 +250,14 @@ class TestDoneCommand:
         dolist.do.db = mock_db
         dolist.do.tasks = mock_tasks
 
-        default_action(1, 'done')
+        default_action(1, "done")
 
-        mock_task.update_record.assert_called_once_with(status='done')
+        mock_task.update_record.assert_called_once_with(status="done")
         # Commit is called twice: once for update, once for history
         assert mock_db.commit.call_count >= 1
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.rprint')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.rprint")
     def test_done_nonexistent_task(self, mock_rprint, mock_init_db):
         """Test marking a non-existent task as done."""
         import dolist.do
@@ -260,7 +267,7 @@ class TestDoneCommand:
         mock_tasks.__getitem__ = Mock(return_value=None)
         dolist.do.tasks = mock_tasks
 
-        default_action(999, 'done')
+        default_action(999, "done")
 
         # Should print not found
         assert mock_rprint.called
@@ -269,9 +276,9 @@ class TestDoneCommand:
 class TestShellCommand:
     """Test the shell() command."""
 
-    @patch('dolist.do.init_db')
-    @patch('ptpython.repl.embed')
-    @patch('dolist.do.Task')
+    @patch("dolist.do.init_db")
+    @patch("ptpython.repl.embed")
+    @patch("dolist.do.Task")
     def test_shell_loads_tasks(self, mock_task_class, mock_embed, mock_init_db):
         """Test that shell command loads tasks."""
         import dolist.do
@@ -309,8 +316,8 @@ class TestShellCommand:
 class TestTUIDefaultCommand:
     """Test the TUI default command."""
 
-    @patch('dolist.do.init_db')
-    @patch('dolist.do.run_tui')
+    @patch("dolist.do.init_db")
+    @patch("dolist.do.run_tui")
     def test_tui_mode_is_default(self, mock_run_tui, mock_init_db):
         """Test that TUI launches by default."""
         import dolist.do
@@ -335,8 +342,8 @@ class TestTUIDefaultCommand:
         assert call_args[0][1] == mock_tasks
         # Third argument should be config dict with theme
         assert isinstance(call_args[0][2], dict)
-        assert 'theme' in call_args[0][2]
-        assert 'config_file' in call_args[0][2]
+        assert "theme" in call_args[0][2]
+        assert "config_file" in call_args[0][2]
 
 
 class TestConfigurationHandling:
@@ -346,6 +353,7 @@ class TestConfigurationHandling:
         """Test that BASEDIR is defined."""
         from dolist.do import BASEDIR
         from pathlib import Path
+
         assert BASEDIR is not None
         assert isinstance(BASEDIR, (str, Path))
 
@@ -353,14 +361,16 @@ class TestConfigurationHandling:
         """Test that CONFIGFILE path is defined."""
         from dolist.do import CONFIGFILE
         from pathlib import Path
+
         assert CONFIGFILE is not None
         assert isinstance(CONFIGFILE, (str, Path))
         # Config can be either config.toml or legacy .dopyrc
-        assert 'config.toml' in str(CONFIGFILE) or '.dopyrc' in str(CONFIGFILE)
+        assert "config.toml" in str(CONFIGFILE) or ".dopyrc" in str(CONFIGFILE)
 
     def test_dburi_is_defined(self):
         """Test that DBURI is defined."""
         from dolist.do import DBURI
+
         assert DBURI is not None
         assert isinstance(DBURI, str)
 
@@ -371,19 +381,21 @@ class TestCycloptsApp:
     def test_app_exists(self):
         """Test that the cyclopts app is defined."""
         from dolist.do import app
+
         assert app is not None
 
     def test_app_has_commands(self):
         """Test that app has registered commands."""
         from dolist.do import app
+
         # Cyclopts app should exist
-        assert hasattr(app, '__call__')
+        assert hasattr(app, "__call__")
 
 
 class TestMainEntryPoint:
     """Test the main_entry() function."""
 
-    @patch('dolist.do.app')
+    @patch("dolist.do.app")
     def test_main_entry_calls_app(self, mock_app):
         """Test that main_entry calls the cyclopts app."""
         from dolist.do import main_entry
