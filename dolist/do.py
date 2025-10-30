@@ -141,6 +141,7 @@ elif CONFIGFILE.exists():
                 "autorefresh_interval", 30
             ),
             "reminder_cmd": toml_config.get("reminders", {}).get("reminder_cmd"),
+            "day_start_hour": toml_config.get("reminders", {}).get("day_start_hour", 9),
             "columns": columns,
         }
     except Exception as e:
@@ -150,6 +151,7 @@ elif CONFIGFILE.exists():
             "dburi": "sqlite://tasks.db",
             "theme": "textual-dark",
             "autorefresh_interval": 30,
+            "day_start_hour": 9,
             "columns": [
                 "id",
                 "name",
@@ -194,6 +196,11 @@ autorefresh_interval = 30
 # If set, this command will be called with task JSON piped to stdin
 # If not set, uses notify-send by default
 # reminder_cmd = "/path/to/custom/reminder/handler"
+
+# Default start hour for day-based reminders (default: 9)
+# When you set a reminder like "monday" or "25" (day of month), this hour will be used
+# Value should be in 24-hour format (0-23)
+day_start_hour = 9
 """
     CONFIGFILE.write_text(default_config)
     CONFIG = {
@@ -201,6 +208,7 @@ autorefresh_interval = 30
         "dburi": "sqlite://tasks.db",
         "theme": "textual-dark",
         "autorefresh_interval": 30,
+        "day_start_hour": 9,
         "columns": [
             "id",
             "name",

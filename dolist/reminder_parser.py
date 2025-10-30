@@ -7,14 +7,21 @@ Supports flexible syntax like:
 - next hour|day|week|month|quarter|year|decade
 - {number} seconds|minutes|hours|days|weeks|months|quarters|years
 - Abbreviations: sec, min, hr, h, d, w, mo, q, y
+- Weekdays: monday|mon, tuesday|tue, wednesday|wed, thursday|thu, friday|fri, saturday|sat, sunday|sun
+- Weekdays with time: monday 9, monday 14, monday 9PM, mon 21
+- Day of month: 25 (next occurrence of day 25)
+- Month+day: 25 Aug, 25 August
+- Full dates: 25 Dec/27, 25 Dec/2027, 15 December/29 11AM
+- ISO format: 2027-01-31 12:00:00, 2027-01-31T12:00:00
 """
 
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import re
+import calendar
 
 
-# Abbreviation mappings
+# Abbreviation mappings for time units
 UNIT_ABBREV = {
     # Seconds
     "sec": "seconds",
@@ -40,9 +47,8 @@ UNIT_ABBREV = {
     "wk": "weeks",
     "wks": "weeks",
     "week": "weeks",
-    # Months
+    # Months (note: "mon" conflicts with Monday, so removed from here)
     "mo": "months",
-    "mon": "months",
     "mos": "months",
     "month": "months",
     # Quarters (3 months)
@@ -58,6 +64,62 @@ UNIT_ABBREV = {
     "decade": "decades",
     "decades": "decades",
 }
+
+# Weekday mappings
+WEEKDAY_NAMES = {
+    "monday": 0,
+    "mon": 0,
+    "tuesday": 1,
+    "tue": 1,
+    "wednesday": 2,
+    "wed": 2,
+    "thursday": 3,
+    "thu": 3,
+    "friday": 4,
+    "fri": 4,
+    "saturday": 5,
+    "sat": 5,
+    "sunday": 6,
+    "sun": 6,
+}
+
+# Month name mappings (1-based)
+MONTH_NAMES = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+
+
+def get_default_start_hour():
+    """Get the default start hour from config, defaulting to 9 AM."""
+    try:
+        from dolist.do import CONFIG
+
+        return CONFIG.get("day_start_hour", 9)
+    except:
+        return 9
 
 
 def normalize_unit(unit: str) -> Optional[str]:
@@ -87,6 +149,120 @@ def normalize_unit(unit: str) -> Optional[str]:
 
     # Check abbreviations
     return UNIT_ABBREV.get(unit_lower)
+
+
+def parse_time_part(time_str: str) -> Optional[int]:
+    """Parse time string like '9', '14', '9PM', '9AM', '21' into hour (24-hour format).
+
+    Args:
+        time_str: Time string to parse
+
+    Returns:
+        Hour in 24-hour format (0-23) or None if invalid
+    """
+    time_str = time_str.strip().upper()
+
+    # Try to parse as simple number (military time or 24-hour)
+    if time_str.isdigit():
+        hour = int(time_str)
+        if 0 <= hour <= 23:
+            return hour
+        return None
+
+    # Try to parse with AM/PM suffix
+    am_pm_match = re.match(r"^(\d+)(AM|PM)$", time_str)
+    if am_pm_match:
+        hour = int(am_pm_match.group(1))
+        meridiem = am_pm_match.group(2)
+
+        if not (1 <= hour <= 12):
+            return None
+
+        if meridiem == "AM":
+            return 0 if hour == 12 else hour
+        else:  # PM
+            return 12 if hour == 12 else hour + 12
+
+    return None
+
+
+def next_weekday(base: datetime, weekday: int, hour: Optional[int] = None) -> datetime:
+    """Get the next occurrence of a weekday.
+
+    Args:
+        base: Base datetime
+        weekday: Target weekday (0=Monday, 6=Sunday)
+        hour: Optional hour to set (default: uses day_start_hour from config)
+
+    Returns:
+        Next occurrence of the weekday
+    """
+    if hour is None:
+        hour = get_default_start_hour()
+
+    # Calculate days until target weekday
+    current_weekday = base.weekday()
+    days_ahead = weekday - current_weekday
+
+    # If it's the same day but time has passed, or it's a past day this week, go to next week
+    if days_ahead <= 0:
+        target_time = base.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if days_ahead == 0 and base < target_time:
+            # Same day, but time hasn't passed yet
+            return target_time
+        # Either same day but time passed, or past day this week
+        days_ahead += 7
+
+    result = base + timedelta(days=days_ahead)
+    return result.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+
+def next_day_of_month(
+    base: datetime, day: int, hour: Optional[int] = None
+) -> Optional[datetime]:
+    """Get the next occurrence of a specific day of the month.
+
+    Args:
+        base: Base datetime
+        day: Day of month (1-31)
+        hour: Optional hour to set (default: uses day_start_hour from config)
+
+    Returns:
+        Next occurrence of the day, or None if invalid day
+    """
+    if not (1 <= day <= 31):
+        return None
+
+    if hour is None:
+        hour = get_default_start_hour()
+
+    # Try current month first
+    try:
+        result = base.replace(day=day, hour=hour, minute=0, second=0, microsecond=0)
+        if result > base:
+            return result
+    except ValueError:
+        pass  # Day doesn't exist in current month
+
+    # Try next month
+    next_month = base.month + 1
+    next_year = base.year
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+
+    try:
+        return datetime(next_year, next_month, day, hour, 0, 0)
+    except ValueError:
+        # Day doesn't exist in next month either, try the month after
+        next_month += 1
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+        try:
+            return datetime(next_year, next_month, day, hour, 0, 0)
+        except ValueError:
+            return None
 
 
 def parse_reminder(
@@ -158,6 +334,142 @@ def parse_reminder(
         else:
             return None, f"Unknown unit in 'next {unit}'", None
 
+    # Pattern: ISO format datetime (2027-01-31 12:00:00, 2027-01-31T12:00:00)
+    iso_match = re.match(
+        r"^(\d{4})-(\d{2})-(\d{2})[Tt\s](\d{2}):(\d{2}):(\d{2})$", text
+    )
+    if iso_match:
+        try:
+            year = int(iso_match.group(1))
+            month = int(iso_match.group(2))
+            day = int(iso_match.group(3))
+            hour = int(iso_match.group(4))
+            minute = int(iso_match.group(5))
+            second = int(iso_match.group(6))
+            result = datetime(year, month, day, hour, minute, second)
+            if result <= base:
+                return None, "Specified datetime is in the past", None
+            return result, None, repeat_interval
+        except ValueError as e:
+            return None, f"Invalid ISO datetime: {e}", None
+
+    # Pattern: ISO format date only (2027-01-31)
+    iso_date_match = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", text)
+    if iso_date_match:
+        try:
+            year = int(iso_date_match.group(1))
+            month = int(iso_date_match.group(2))
+            day = int(iso_date_match.group(3))
+            result = datetime(year, month, day, get_default_start_hour(), 0, 0)
+            if result <= base:
+                return None, "Specified date is in the past", None
+            return result, None, repeat_interval
+        except ValueError as e:
+            return None, f"Invalid ISO date: {e}", None
+
+    # Pattern: "Day Month/Year Time" (e.g., "15 December/29 11AM", "25 Dec/2027 9PM")
+    full_date_time_match = re.match(
+        r"^(\d{1,2})\s+([a-z]+)/(\d{2,4})\s+(\d{1,2}(?:AM|PM|am|pm)?)$", text
+    )
+    if full_date_time_match:
+        try:
+            day = int(full_date_time_match.group(1))
+            month_str = full_date_time_match.group(2).lower()
+            year_str = full_date_time_match.group(3)
+            time_str = full_date_time_match.group(4)
+
+            month = MONTH_NAMES.get(month_str)
+            if not month:
+                return None, f"Unknown month: {month_str}", None
+
+            # Parse year (2-digit or 4-digit)
+            year = int(year_str)
+            if year < 100:
+                year += 2000
+
+            hour = parse_time_part(time_str)
+            if hour is None:
+                return None, f"Invalid time: {time_str}", None
+
+            result = datetime(year, month, day, hour, 0, 0)
+            if result <= base:
+                return None, "Specified datetime is in the past", None
+            return result, None, repeat_interval
+        except ValueError as e:
+            return None, f"Invalid date: {e}", None
+
+    # Pattern: "Day Month/Year" (e.g., "25 Dec/27", "25 Dec/2027")
+    full_date_match = re.match(r"^(\d{1,2})\s+([a-z]+)/(\d{2,4})$", text)
+    if full_date_match:
+        try:
+            day = int(full_date_match.group(1))
+            month_str = full_date_match.group(2).lower()
+            year_str = full_date_match.group(3)
+
+            month = MONTH_NAMES.get(month_str)
+            if not month:
+                return None, f"Unknown month: {month_str}", None
+
+            # Parse year (2-digit or 4-digit)
+            year = int(year_str)
+            if year < 100:
+                year += 2000
+
+            result = datetime(year, month, day, get_default_start_hour(), 0, 0)
+            if result <= base:
+                return None, "Specified date is in the past", None
+            return result, None, repeat_interval
+        except ValueError as e:
+            return None, f"Invalid date: {e}", None
+
+    # Pattern: "Day Month" (e.g., "25 Aug", "25 August")
+    month_day_match = re.match(r"^(\d{1,2})\s+([a-z]+)$", text)
+    if month_day_match:
+        try:
+            day = int(month_day_match.group(1))
+            month_str = month_day_match.group(2).lower()
+
+            month = MONTH_NAMES.get(month_str)
+            if not month:
+                # Not a month name, continue to other patterns
+                pass
+            else:
+                # Find next occurrence of this month/day
+                year = base.year
+                try:
+                    result = datetime(year, month, day, get_default_start_hour(), 0, 0)
+                    if result <= base:
+                        # Try next year
+                        result = datetime(
+                            year + 1, month, day, get_default_start_hour(), 0, 0
+                        )
+                    return result, None, repeat_interval
+                except ValueError as e:
+                    return None, f"Invalid date: {e}", None
+        except ValueError:
+            pass
+
+    # Pattern: "Weekday Time" (e.g., "monday 9", "mon 14", "monday 9PM")
+    weekday_time_match = re.match(r"^([a-z]+)\s+(\d{1,2}(?:AM|PM|am|pm)?)$", text)
+    if weekday_time_match:
+        weekday_str = weekday_time_match.group(1).lower()
+        time_str = weekday_time_match.group(2)
+
+        weekday = WEEKDAY_NAMES.get(weekday_str)
+        if weekday is not None:
+            hour = parse_time_part(time_str)
+            if hour is None:
+                return None, f"Invalid time: {time_str}", None
+
+            result = next_weekday(base, weekday, hour)
+            return result, None, repeat_interval
+
+    # Pattern: "Weekday" alone (e.g., "monday", "mon")
+    if text in WEEKDAY_NAMES:
+        weekday = WEEKDAY_NAMES[text]
+        result = next_weekday(base, weekday)
+        return result, None, repeat_interval
+
     # Pattern: "<number> <unit>"
     number_match = re.match(r"^(\d+)\s+([a-zA-Z]+)$", text)
     if number_match:
@@ -193,6 +505,14 @@ def parse_reminder(
                 return None, f"Unsupported unit: {normalized}", None
         except ValueError as e:
             return None, f"Invalid number: {e}", None
+
+    # Pattern: Just a number (day of month)
+    if text.isdigit():
+        day = int(text)
+        result = next_day_of_month(base, day)
+        if result is None:
+            return None, f"Invalid day of month: {day}", None
+        return result, None, repeat_interval
 
     return None, f"Could not parse reminder: '{text}'", None
 

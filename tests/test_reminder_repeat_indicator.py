@@ -64,4 +64,6 @@ class TestReminderRepeatIndicatorLogic:
         if row_without_repeat.get("reminder_repeat"):
             reminder_display = f"{reminder_display} (r)"
 
-        assert "(r)" not in reminder_display, "Should not add (r) when reminder_repeat is None"
+        assert "(r)" not in reminder_display, (
+            "Should not add (r) when reminder_repeat is None"
+        )

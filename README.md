@@ -779,11 +779,38 @@ dolist add "Quick task" --reminder "10 mins"    # 10 minutes
 dolist add "Short break" --reminder "2 hrs"     # 2 hours
 dolist add "Follow-up" --reminder "5 d"         # 5 days
 
+# Weekday reminders (monday, tuesday, wed, thu, fri, sat, sun)
+dolist add "Team standup" --reminder monday          # Next Monday at 9 AM (default)
+dolist add "Code review" --reminder friday           # Next Friday at 9 AM
+dolist add "Meeting" --reminder "monday 9"           # Next Monday at 9:00
+dolist add "Lunch" --reminder "friday 12"            # Next Friday at 12:00 (noon)
+dolist add "Evening task" --reminder "monday 9PM"    # Next Monday at 9:00 PM
+dolist add "Early meeting" --reminder "tue 7AM"      # Next Tuesday at 7:00 AM
+
+# Day of month reminders
+dolist add "Monthly report" --reminder 1             # Next 1st of the month at 9 AM
+dolist add "Mid-month review" --reminder 15          # Next 15th at 9 AM
+dolist add "End of month" --reminder 30              # Next 30th at 9 AM
+
+# Month and day reminders
+dolist add "Summer vacation" --reminder "15 Aug"     # Next August 15th at 9 AM
+dolist add "Birthday" --reminder "25 December"       # Next December 25th at 9 AM
+
+# Full date with year
+dolist add "Project launch" --reminder "25 Dec/2027"     # Dec 25, 2027 at 9 AM
+dolist add "Deadline" --reminder "15 December/29 11AM"   # Dec 15, 2029 at 11:00 AM
+
+# ISO format dates
+dolist add "Conference" --reminder "2027-06-15"          # June 15, 2027 at 9 AM
+dolist add "Meeting" --reminder "2027-06-15 14:00:00"    # June 15, 2027 at 2:00 PM
+dolist add "Webinar" --reminder "2027-06-15T14:00:00"    # ISO format with T separator
+
 # Recurring reminders (repeating tasks)
 dolist add "Drink water" --reminder "2 hours repeat"      # Repeats every 2 hours
 dolist add "Daily standup" --reminder "tomorrow repeat"   # Repeats daily
 dolist add "Weekly review" --reminder "1 week repeat"     # Repeats weekly
-dolist add "Take medication" --reminder "8 hours repeat"  # Repeats every 8 hours
+dolist add "Weekly meeting" --reminder "monday 10AM repeat"  # Every Monday at 10 AM
+dolist add "Monthly report" --reminder "1 repeat"         # 1st of every month at 9 AM
 ```
 
 **Supported time units:**
@@ -792,10 +819,33 @@ dolist add "Take medication" --reminder "8 hours repeat"  # Repeats every 8 hour
 - Hours: `hr`, `hrs`, `h`, `ho`, `hour`, `hours`
 - Days: `d`, `day`, `days`
 - Weeks: `w`, `wk`, `wks`, `week`, `weeks`
-- Months: `mo`, `mon`, `mos`, `month`, `months`
+- Months: `mo`, `mos`, `month`, `months`
 - Quarters: `q`, `qtr`, `quarter`, `quarters` (3 months each)
 - Years: `y`, `yr`, `yrs`, `year`, `years`
 - Decades: `decade`, `decades`
+
+**Weekday names:**
+- Monday: `monday`, `mon`
+- Tuesday: `tuesday`, `tue`
+- Wednesday: `wednesday`, `wed`
+- Thursday: `thursday`, `thu`
+- Friday: `friday`, `fri`
+- Saturday: `saturday`, `sat`
+- Sunday: `sunday`, `sun`
+
+**Month names:**
+- `jan`/`january`, `feb`/`february`, `mar`/`march`, `apr`/`april`
+- `may`, `jun`/`june`, `jul`/`july`, `aug`/`august`
+- `sep`/`sept`/`september`, `oct`/`october`, `nov`/`november`, `dec`/`december`
+
+**Default start hour configuration:**
+
+When you set reminders using weekdays or day-of-month (e.g., "monday" or "25"), the default time is 9 AM. You can customize this in your config file (`~/.config/dolist/config.toml`):
+
+```toml
+[reminders]
+day_start_hour = 9  # Default: 9 (use 24-hour format: 0-23)
+```
 
 ##### Delaying Reminders
 
@@ -1200,18 +1250,3 @@ Uses a lightweight SQLite wrapper that:
 
 This project is open source. See the repository for license details.
 
-## Roadmap
-
-- [x] Migrate from docopt to Cyclopts
-- [x] Add Rich table rendering
-- [x] Create Textual TUI mode
-- [x] Implement Pydantic models
-- [x] Lightweight SQLite database wrapper
-- [x] Comprehensive test suite (105 tests)
-- [x] Smart reminders with natural language parsing
-- [x] Background reminder service with systemd support
-- [x] Desktop notifications for reminders
-- [x] Add export functionality JSON
-- [ ] Implement task priorities
-- [ ] Add recurring tasks
-- [ ] Task dependencies and subtasks

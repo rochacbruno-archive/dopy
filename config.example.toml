@@ -78,5 +78,10 @@ autorefresh_interval = 30
 # Example: Send to a webhook
 # reminder_cmd = "curl -X POST -H 'Content-Type: application/json' -d @- https://example.com/webhook"
 
-# Multiple database support for reminder service (future feature)
+# Multiple database support for reminder service
 # databases = ["tasks.db", "work.db", "personal.db"]
+
+# Default start hour for day-based reminders (default: 9)
+# When you set a reminder like "monday" or "25" (day of month), this hour will be used
+# Value should be in 24-hour format (0-23)
+day_start_hour = 9
