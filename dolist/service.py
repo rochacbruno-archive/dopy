@@ -175,6 +175,13 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
         while True:
             now = datetime.now()
 
+            # Ensure we have a fresh connection by committing any pending transactions
+            # This forces SQLite to refresh its cache
+            try:
+                db.commit()
+            except:
+                pass  # Ignore if there's nothing to commit
+
             # Query for tasks with reminders that are due
             # Exclude done/cancelled tasks
             query = (
@@ -236,5 +243,138 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
     except KeyboardInterrupt:
         console.print("\n[yellow]Service stopped by user[/yellow]")
     except Exception as e:
-        console.print(f"\n[red]Service error: {e}[/red]")
+        # Use repr to avoid Rich markup interpretation in error messages
+        error_msg = repr(str(e))
+        console.print(f"\n[red]Service error: {error_msg}[/red]")
+        raise
+
+
+def run_multi_db_service_loop(db_list: list, config: dict, check_interval: int = 30, verbose: bool = False) -> None:
+    """Run the reminder service loop for multiple databases.
+
+    Args:
+        db_list: List of tuples (db, tasks_table, db_name)
+        config: Configuration dictionary
+        check_interval: Seconds between checks (default: 30)
+        verbose: Enable verbose logging
+    """
+    from .reminder_parser import parse_reminder
+
+    console.print("[bold green]DoList Multi-Database Reminder Service Started[/bold green]")
+    console.print(f"[cyan]Monitoring {len(db_list)} database(s)[/cyan]")
+    for _, _, db_name in db_list:
+        console.print(f"  - {db_name}")
+    console.print(f"[cyan]Checking for reminders every {check_interval} seconds[/cyan]")
+    console.print("[yellow]Press Ctrl+C to stop[/yellow]\n")
+
+    try:
+        cycle = 0
+        while True:
+            cycle += 1
+            now = datetime.now()
+            total_due_tasks = 0
+
+            if verbose:
+                console.print(f"\n[dim]>>> Cycle {cycle} at {now.strftime('%H:%M:%S')}[/dim]")
+
+            # Loop through all databases
+            for db, tasks_table, db_name in db_list:
+                # Ensure we have a fresh connection by committing any pending transactions
+                # This forces SQLite to refresh its cache
+                try:
+                    db.commit()
+                except:
+                    pass  # Ignore if there's nothing to commit
+
+                # Query for all tasks to count them in verbose mode
+                if verbose:
+                    all_tasks_query = tasks_table.deleted != True
+                    all_tasks = db(all_tasks_query).select()
+                    # Use parentheses instead of brackets to avoid Rich markup errors
+                    console.print(f"[dim]  ({db_name}) Total tasks: {len(all_tasks)}[/dim]")
+
+                # Query for tasks with reminders that are due
+                # Exclude done/cancelled tasks
+                query = (
+                    (tasks_table.deleted != True) &
+                    (tasks_table.reminder_timestamp != None) &
+                    (tasks_table.reminder_timestamp <= now) &
+                    ~(tasks_table.status.belongs(['done', 'cancel']))
+                )
+
+                due_tasks = db(query).select()
+
+                if verbose:
+                    # Count tasks with reminders (even if not due yet)
+                    reminder_query = (
+                        (tasks_table.deleted != True) &
+                        (tasks_table.reminder_timestamp != None) &
+                        ~(tasks_table.status.belongs(['done', 'cancel']))
+                    )
+                    tasks_with_reminders = db(reminder_query).select()
+                    # Use parentheses instead of brackets to avoid Rich markup errors
+                    console.print(f"[dim]  ({db_name}) Tasks with reminders: {len(tasks_with_reminders)}[/dim]")
+                    console.print(f"[dim]  ({db_name}) Due reminders: {len(due_tasks)}[/dim]")
+
+                if due_tasks:
+                    total_due_tasks += len(due_tasks)
+                    console.print(f"[yellow]Database '({db_name})': Found {len(due_tasks)} due reminder(s)[/yellow]")
+
+                    for task_row in due_tasks:
+                        console.print(f"[cyan]  ({db_name}) Processing task #{task_row.id}: {task_row.name}[/cyan]")
+
+                        # Prepare task data
+                        task_data = {
+                            'id': task_row.id,
+                            'name': task_row.name,
+                            'tag': task_row.tag,
+                            'status': task_row.status,
+                            'reminder': task_row.reminder,
+                            'notes': task_row.notes or [],
+                            'created_on': task_row.created_on.isoformat() if task_row.created_on else None,
+                            'database': db_name,  # Include database name in notification
+                        }
+
+                        # Trigger reminder
+                        trigger_reminder(task_data, config)
+
+                        # Check if this is a recurring reminder
+                        reminder_repeat = getattr(task_row, 'reminder_repeat', None)
+
+                        if reminder_repeat:
+                            # Reschedule the reminder
+                            console.print(f"[cyan]  Rescheduling recurring reminder: {reminder_repeat}[/cyan]")
+                            next_dt, error, _ = parse_reminder(reminder_repeat)
+
+                            if next_dt and not error:
+                                task_row.update_record(reminder_timestamp=next_dt)
+                                db.commit()
+                                console.print(f"[green]  ✓ Reminder rescheduled for {next_dt.strftime('%Y-%m-%d %H:%M:%S')}[/green]\n")
+                            else:
+                                console.print(f"[red]  Failed to reschedule: {error}[/red]")
+                                # Clear the reminder if parsing fails
+                                task_row.update_record(reminder_timestamp=None)
+                                db.commit()
+                                console.print(f"[yellow]  Reminder cleared due to parsing error[/yellow]\n")
+                        else:
+                            # One-time reminder: clear it
+                            task_row.update_record(reminder_timestamp=None)
+                            db.commit()
+                            console.print(f"[green]  ✓ Reminder cleared for task #{task_row.id}[/green]\n")
+
+            if verbose:
+                if total_due_tasks == 0:
+                    console.print(f"[dim]  No due reminders this cycle[/dim]")
+
+            # Wait before next check
+            if verbose:
+                console.print(f"[dim]Waiting {check_interval} seconds until next check...[/dim]")
+            time.sleep(check_interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Service stopped by user[/yellow]")
+    except Exception as e:
+        # Use repr to avoid Rich markup interpretation in error messages
+        error_msg = repr(str(e))
+        console.print(f"\n[red]Service error: {error_msg}[/red]")
         raise

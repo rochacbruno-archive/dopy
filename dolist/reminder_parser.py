@@ -153,7 +153,7 @@ def parse_reminder(text: str, base_time: Optional[datetime] = None) -> Tuple[Opt
             return None, f"Unknown unit in 'next {unit}'", None
 
     # Pattern: "<number> <unit>"
-    number_match = re.match(r'^(\d+)\s*(\w+)$', text)
+    number_match = re.match(r'^(\d+)\s+([a-zA-Z]+)$', text)
     if number_match:
         try:
             amount = int(number_match.group(1))

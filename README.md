@@ -834,6 +834,18 @@ The reminder service monitors your tasks and sends notifications when they're du
 # Run service manually (foreground)
 dolist service
 
+# Monitor multiple databases
+dolist service --databases tasks.db:work.db:personal.db
+
+# With absolute paths
+dolist service --databases /tmp/work.db:/home/user/personal.db
+
+# Verbose mode with custom interval (10 seconds)
+dolist service --verbose --interval 10
+
+# Combine all options
+dolist service --verbose --interval 10 --databases tasks.db:work.db
+
 # Install as systemd service (runs automatically)
 dolist service --enable
 
@@ -842,6 +854,47 @@ systemctl --user status dolist-reminder.service
 
 # Stop the service
 systemctl --user stop dolist-reminder.service
+```
+
+**Multi-Database Support:**
+
+The service can monitor multiple databases simultaneously:
+
+```bash
+# Via command line (colon-separated)
+dolist service --databases tasks.db:work.db:personal.db
+
+# Or via config file (~/.config/dolist/config.toml)
+[reminder]
+databases = ["tasks.db", "work.db", "personal.db"]
+```
+
+This allows you to run a single service instance that watches all your task databases. The service loops through each database every cycle and processes reminders from all of them.
+
+**Service Options:**
+
+- `--verbose`: Enable detailed debugging output showing:
+  - Cycle number and timestamp
+  - Total tasks per database
+  - Tasks with reminders (even if not due yet)
+  - Due reminder counts
+  - Processing details
+
+- `--interval N`: Set check interval in seconds (default: 30)
+  - Lower values = faster reminder detection but more CPU usage
+  - Example: `--interval 10` checks every 10 seconds
+
+**Verbose Output Example:**
+```
+>>> Cycle 1 at 14:25:59
+  (/tmp/foo.db) Total tasks: 5
+  (/tmp/foo.db) Tasks with reminders: 3
+  (/tmp/foo.db) Due reminders: 1
+Database '(/tmp/foo.db)': Found 1 due reminder(s)
+  (/tmp/foo.db) Processing task #1: Important meeting
+✓ Notification sent for task #1
+✓ Reminder cleared for task #1
+Waiting 30 seconds until next check...
 ```
 
 **What happens when a reminder is due?**

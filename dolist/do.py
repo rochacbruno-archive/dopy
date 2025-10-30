@@ -271,11 +271,19 @@ def init_db(use_db: Optional[str] = None):
     Returns:
         The database URI that was used
     """
-    global db, tasks, history
+    global db, tasks, history, DBDIR
     dburi = DBURI
     if use_db:
-        # Replace database name in URI
-        dburi = dburi.replace('tasks', use_db).replace('dopy', use_db)
+        # Check if it's an absolute path
+        from pathlib import Path
+        db_path = Path(use_db)
+        if db_path.is_absolute():
+            # Absolute path: override DBDIR and use just the filename in URI
+            DBDIR = str(db_path.parent)
+            dburi = f"sqlite://{db_path.name}"
+        else:
+            # Relative path: replace database name in URI
+            dburi = dburi.replace('tasks', use_db).replace('dopy', use_db)
     db, tasks, history = database(dburi)
     return dburi
 
@@ -1138,10 +1146,10 @@ def ls(
     # Map column names to display names and formatting functions
     column_display_map = {
         'id': ('ID', lambda r: ID(str(r.id))),
-        'name': ('Name', lambda r: r.get('_name_display', NAME(str(r.name)))),
+        'name': ('Name', lambda r: getattr(r, '_name_display', NAME(str(r.name)))),
         'tag': ('Tag', lambda r: TAG(str(r.tag))),
-        'status': ('Status', lambda r: r.get('_status_display', STATUS(str(r.status)))),
-        'reminder': ('Reminder', lambda r: r.get('_reminder_display', '')),
+        'status': ('Status', lambda r: getattr(r, '_status_display', STATUS(str(r.status)))),
+        'reminder': ('Reminder', lambda r: getattr(r, '_reminder_display', '')),
         'notes': ('Notes', lambda r: str(len(r.notes) if r.notes else 0)),
         'created': ('Created', lambda r: str(r.created_on.strftime("%d/%m-%H:%M"))),
         'priority': ('Priority', lambda r: str(r.get('priority', 0))),
@@ -1308,13 +1316,19 @@ def service(
     enable: bool = False,
     remind: bool = False,
     use: Optional[str] = None,
+    databases: Optional[str] = None,
+    verbose: bool = False,
+    interval: int = 30,
 ):
     """Run or manage the reminder service.
 
     Args:
         enable: Install and enable as systemd service.
         remind: Process a reminder (reads task JSON from stdin).
-        use: Database name to use (optional).
+        use: Database name to use (optional, deprecated - use --databases).
+        databases: Colon-separated list of databases to monitor (e.g., "tasks.db:work.db").
+        verbose: Enable verbose logging with detailed debugging information.
+        interval: Check interval in seconds (default: 30).
     """
     if enable:
         # Install systemd service
@@ -1341,10 +1355,79 @@ def service(
         return
 
     # Default: run service loop
-    init_db(use)
+    # Determine which databases to monitor
+    db_list = []
+
+    if databases:
+        # CLI argument takes precedence
+        db_names = databases.split(':')
+        console.print(f"[cyan]Using databases from CLI: {db_names}[/cyan]")
+    elif 'databases' in CONFIG.get('reminder', {}):
+        # Use config file
+        db_names = CONFIG['reminder']['databases']
+        console.print(f"[cyan]Using databases from config: {db_names}[/cyan]")
+    elif use:
+        # Fallback to single database from --use
+        db_names = [use]
+        console.print(f"[cyan]Using single database from --use: {use}[/cyan]")
+    else:
+        # Default database
+        db_names = [None]  # None means use default database
+        console.print("[cyan]Using default database[/cyan]")
+
+    # Initialize all databases
+    from .database import Database
+    from .database import FieldDef
+    from pathlib import Path
+
+    for db_name in db_names:
+        if db_name:
+            # Check if it's an absolute path or relative
+            db_path = Path(db_name)
+            if db_path.is_absolute():
+                # Absolute path: use parent dir as folder, filename as db name
+                db_folder = str(db_path.parent)
+                db_file = db_path.name
+                db_uri = f"sqlite://{db_file}"
+                db_obj = Database(db_uri, folder=db_folder)
+                display_name = str(db_path)
+            else:
+                # Relative path: use BASEDIR
+                db_uri = f"sqlite://{db_name}"
+                db_obj = Database(db_uri, folder=str(BASEDIR))
+                display_name = db_name
+        else:
+            # Use default database (already initialized)
+            init_db(None)
+            db_obj = db
+            display_name = "default"
+
+        # Define table for this database
+        tasks_table = db_obj.define_table("dolist_tasks",
+            FieldDef("name", "string"),
+            FieldDef("tag", "string"),
+            FieldDef("status", "string"),
+            FieldDef("reminder", "string"),
+            FieldDef("reminder_timestamp", "datetime"),
+            FieldDef("reminder_repeat", "string"),
+            FieldDef("notes", "list:string"),
+            FieldDef("created_on", "datetime"),
+            FieldDef("deleted", "boolean", default=False),
+            FieldDef("priority", "integer", default=0),
+            FieldDef("size", "string", default="U"),
+        )
+
+        db_list.append((db_obj, tasks_table, display_name))
+
     console.print("[bold green]Starting DoList Reminder Service[/bold green]")
-    console.print(f"[cyan]Using database: {DBURI}[/cyan]")
-    run_service_loop(db, tasks, CONFIG)
+    console.print(f"[cyan]Monitoring {len(db_list)} database(s)[/cyan]")
+    if verbose:
+        console.print(f"[cyan]Verbose mode: ON[/cyan]")
+    console.print(f"[cyan]Check interval: {interval} seconds[/cyan]")
+
+    # Run multi-database service loop
+    from .service import run_multi_db_service_loop
+    run_multi_db_service_loop(db_list, CONFIG, check_interval=interval, verbose=verbose)
 
 
 @app.command
