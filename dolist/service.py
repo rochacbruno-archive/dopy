@@ -16,7 +16,9 @@ from rich.console import Console
 console = Console()
 
 
-def get_systemd_service_template(python_path: str, dolist_path: str, is_system: bool = False) -> str:
+def get_systemd_service_template(
+    python_path: str, dolist_path: str, is_system: bool = False
+) -> str:
     """Generate systemd service template.
 
     Args:
@@ -206,9 +208,11 @@ def run_service_loop(db, tasks_table, config: dict, check_interval: int = 30) ->
 
             # Query for tasks with reminders that are due
             # Exclude done/cancelled tasks
+            # NOTE: Must use `== False` and `!= None` for DAL query building
+            # (not Python's `is False` or `is not None`) - these create Condition objects
             query = (
-                (tasks_table.deleted == False)
-                & (tasks_table.reminder_timestamp != None)
+                (tasks_table.deleted == False)  # noqa: E712
+                & (tasks_table.reminder_timestamp != None)  # noqa: E711
                 & (tasks_table.reminder_timestamp <= now)
                 & ~(tasks_table.status.belongs(["done", "cancel"]))
             )
@@ -332,7 +336,7 @@ def run_multi_db_service_loop(
 
                 # Query for all tasks to count them in verbose mode
                 if verbose:
-                    all_tasks_query = tasks_table.deleted == False
+                    all_tasks_query = tasks_table.deleted == False  # noqa: E712
                     all_tasks = db(all_tasks_query).select()
                     # Use parentheses instead of brackets to avoid Rich markup errors
                     console.print(
@@ -341,9 +345,11 @@ def run_multi_db_service_loop(
 
                 # Query for tasks with reminders that are due
                 # Exclude done/cancelled tasks
+                # NOTE: Must use `== False` and `!= None` for DAL query building
+                # (not Python's `is False` or `is not None`) - these create Condition objects
                 query = (
-                    (tasks_table.deleted == False)
-                    & (tasks_table.reminder_timestamp != None)
+                    (tasks_table.deleted == False)  # noqa: E712
+                    & (tasks_table.reminder_timestamp != None)  # noqa: E711
                     & (tasks_table.reminder_timestamp <= now)
                     & ~(tasks_table.status.belongs(["done", "cancel"]))
                 )
@@ -353,8 +359,8 @@ def run_multi_db_service_loop(
                 if verbose:
                     # Count tasks with reminders (even if not due yet)
                     reminder_query = (
-                        (tasks_table.deleted == False)
-                        & (tasks_table.reminder_timestamp != None)
+                        (tasks_table.deleted == False)  # noqa: E712
+                        & (tasks_table.reminder_timestamp != None)  # noqa: E711
                         & ~(tasks_table.status.belongs(["done", "cancel"]))
                     )
                     tasks_with_reminders = db(reminder_query).select()
