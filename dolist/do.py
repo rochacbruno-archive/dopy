@@ -937,6 +937,8 @@ def ls(
     size: Optional[str] = None,
     under: Optional[int] = None,
     json: bool = False,
+    report: bool = False,
+    period: str = "month",
     action: Optional[str] = None,
     action_args: Optional[str] = None,
     yes: Annotated[bool, Parameter(name=["--yes", "-y"])] = False,
@@ -959,6 +961,8 @@ def ls(
         size: Filter by size (U, S, M, L).
         under: Filter by parent task ID (shows tasks that depend on or are under this task).
         json: Output in JSON format.
+        report: Generate metrics report for the filtered tasks.
+        period: Period for report aggregation (day, week, month, year). Default: month.
         action: Bulk action to perform on all matching tasks (done, start, cancel, new, post, delete, rm, remind).
         action_args: Arguments for the bulk action (e.g., reminder time).
         yes: Skip confirmation prompt for bulk actions.
@@ -1168,6 +1172,101 @@ def ls(
                 filtered_rows.append(row)
 
         rows = filtered_rows
+
+    # Handle report output
+    if report:
+        from .reports import calculate_metrics, format_metrics_json
+        from .taskmodel import Task
+
+        # Convert rows to Task objects for metrics calculation
+        task_objects = [Task.from_row(db, row) for row in rows]
+        metrics = calculate_metrics(task_objects, period=period)
+
+        # Output as JSON or with uniplot charts
+        if json:
+            print(format_metrics_json(metrics))
+        else:
+            # Display charts using uniplot
+            from uniplot import plot
+
+            console.print(f"\n[bold cyan]Task Report - Period: {period.title()}[/bold cyan]")
+            console.print(f"[green]Total Tasks: {metrics['total_tasks']}[/green]\n")
+
+            # Status distribution pie chart (as bar chart)
+            if metrics['status_totals']:
+                console.print("[bold yellow]Tasks by Status:[/bold yellow]")
+                statuses = list(metrics['status_totals'].keys())
+                counts = list(metrics['status_totals'].values())
+                percentages = [metrics['status_percentages'][s] for s in statuses]
+
+                for status, count, pct in zip(statuses, counts, percentages):
+                    console.print(f"  {status}: {count} ({pct:.1f}%)")
+
+                # Create a simple bar chart using uniplot
+                try:
+                    plot(
+                        xs=list(range(len(statuses))),
+                        ys=counts,
+                        lines=True,
+                        title="Tasks by Status",
+                        height=10,
+                        width=60,
+                    )
+                except Exception:
+                    # Fallback if uniplot fails
+                    pass
+                console.print()
+
+            # Tag distribution
+            if metrics['tag_totals']:
+                console.print("[bold yellow]Tasks by Tag:[/bold yellow]")
+                tags = list(metrics['tag_totals'].keys())
+                tag_counts = list(metrics['tag_totals'].values())
+                tag_percentages = [metrics['tag_percentages'][t] for t in tags]
+
+                for tag, count, pct in zip(tags, tag_counts, tag_percentages):
+                    console.print(f"  {tag}: {count} ({pct:.1f}%)")
+
+                # Create a simple bar chart using uniplot
+                try:
+                    plot(
+                        xs=list(range(len(tags))),
+                        ys=tag_counts,
+                        lines=True,
+                        title="Tasks by Tag",
+                        height=10,
+                        width=60,
+                    )
+                except Exception:
+                    # Fallback if uniplot fails
+                    pass
+                console.print()
+
+            # Tasks over time
+            if metrics['total_by_period']:
+                console.print("[bold yellow]Tasks by Period:[/bold yellow]")
+                periods = sorted(metrics['total_by_period'].keys())
+                period_counts = [metrics['total_by_period'][p] for p in periods]
+
+                for period_label, count in zip(periods, period_counts):
+                    console.print(f"  {period_label}: {count}")
+
+                # Create a simple line chart
+                try:
+                    plot(
+                        xs=list(range(len(periods))),
+                        ys=period_counts,
+                        lines=True,
+                        title=f"Tasks Created by {period.title()}",
+                        height=10,
+                        width=60,
+                    )
+                except Exception:
+                    # Fallback if uniplot fails
+                    pass
+                console.print()
+
+        return
 
     # Handle bulk actions
     if action:

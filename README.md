@@ -34,6 +34,7 @@ optionally use your Dropbox to store the database
 - **Systemd Integration** for automatic reminder service
 - **Multiple Databases** support
 - **Stdin Support** for adding tasks and notes from pipes and files
+- **Metrics & Reporting** with interactive charts and JSON export
 
 ## Requirements
 
@@ -1117,6 +1118,121 @@ Notes can be removed by their index number using the `--rm` flag:
 
 ```bash
 dolist 1 note --rm 0
+```
+
+## Metrics & Reporting
+
+DoList provides comprehensive metrics and reporting features to help you analyze your task management patterns.
+
+### CLI Reports
+
+Generate reports from the command line with charts and statistics:
+
+```bash
+# Generate report for all active tasks (default period: month)
+dolist ls --report
+
+# Generate report with JSON output
+dolist ls --report --json
+
+# Change the aggregation period (day, week, month, year)
+dolist ls --report --period week
+
+# Generate report for specific filters
+dolist ls --tag work --report
+dolist ls --status done --report --period year
+dolist ls --all --report  # Include all tasks (done, cancelled, etc.)
+```
+
+The CLI report displays:
+- **Total task count** in the filtered set
+- **Tasks by Status** - Distribution and percentages with charts
+- **Tasks by Tag** - Distribution and percentages with charts
+- **Tasks by Period** - Timeline of task creation with line charts
+
+Example output:
+```
+Task Report - Period: Month
+Total Tasks: 25
+
+Tasks by Status:
+  new: 10 (40.0%)
+  in-progress: 8 (32.0%)
+  done: 7 (28.0%)
+
+[ASCII chart showing distribution]
+
+Tasks by Tag:
+  work: 15 (60.0%)
+  personal: 10 (40.0%)
+
+[ASCII chart showing distribution]
+
+Tasks by Period:
+  2025-09: 8
+  2025-10: 17
+
+[ASCII line chart showing trend]
+```
+
+### TUI Reports
+
+In the interactive TUI mode, press **`r`** to open the metrics report screen:
+
+```bash
+dolist  # Launch TUI
+# Press 'r' to open the report
+```
+
+The TUI report screen features:
+- **Interactive charts** using plotext library
+- **Period selector buttons** (Day/Week/Month/Year)
+- **Real-time filtering** - report shows metrics for currently filtered tasks
+- **Keyboard shortcuts**:
+  - `d` - Switch to daily view
+  - `w` - Switch to weekly view
+  - `m` - Switch to monthly view
+  - `y` - Switch to yearly view
+  - `Esc` - Close report
+
+The TUI report includes:
+- Horizontal bar charts for status and tag distributions
+- Line charts for task creation trends over time
+- Percentage breakdowns for all metrics
+- Dynamic period selection with instant chart updates
+
+### Report Metrics
+
+Reports calculate the following metrics:
+
+1. **Total Tasks** - Count of tasks in the current filter
+2. **Status Distribution** - Count and percentage per status (new, in-progress, done, cancel, post)
+3. **Tag Distribution** - Count and percentage per tag
+4. **Period Totals** - Tasks created per time period
+5. **Status by Period** - Breakdown of status distribution across time periods
+6. **Tag by Period** - Breakdown of tag distribution across time periods
+
+### JSON Export
+
+For programmatic access or custom analysis, use `--json` with `--report`:
+
+```bash
+dolist ls --report --json > metrics.json
+```
+
+The JSON output includes all calculated metrics in a structured format:
+```json
+{
+  "total_tasks": 25,
+  "period": "month",
+  "status_totals": {"new": 10, "in-progress": 8, "done": 7},
+  "status_percentages": {"new": 40.0, "in-progress": 32.0, "done": 28.0},
+  "tag_totals": {"work": 15, "personal": 10},
+  "tag_percentages": {"work": 60.0, "personal": 40.0},
+  "total_by_period": {"2025-09": 8, "2025-10": 17},
+  "status_by_period": {...},
+  "tag_by_period": {...}
+}
 ```
 
 ## Multiple Databases

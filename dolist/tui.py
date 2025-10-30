@@ -940,7 +940,8 @@ class KeyBindingsHelpScreen(ModalScreen):
             ("c", "Show children tasks"),
             ("", ""),
             ("View & Filters", ""),
-            ("r", "Refresh task list"),
+            ("r", "Show metrics report"),
+            ("F5", "Refresh task list"),
             ("x", "Toggle auto-refresh"),
             ("u", "Switch database"),
             ("h", "View task history"),
@@ -972,6 +973,270 @@ class KeyBindingsHelpScreen(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "close_btn":
             self.app.pop_screen()
+
+
+class ReportScreen(ModalScreen):
+    """Modal screen showing task metrics and charts."""
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+        Binding("d", "change_period_day", "Day", show=False),
+        Binding("w", "change_period_week", "Week", show=False),
+        Binding("m", "change_period_month", "Month", show=False),
+        Binding("y", "change_period_year", "Year", show=False),
+    ]
+
+    CSS = """
+    ReportScreen {
+        align: center middle;
+    }
+
+    #report_dialog {
+        width: 95%;
+        max-width: 120;
+        height: 90%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+
+    #report_title {
+        text-align: center;
+        text-style: bold;
+        color: $accent;
+        margin: 0 0 1 0;
+    }
+
+    #period_selector {
+        width: 100%;
+        height: auto;
+        margin: 0 0 1 0;
+    }
+
+    #period_buttons {
+        width: 100%;
+        height: auto;
+        margin: 0 0 1 0;
+    }
+
+    #period_buttons Button {
+        margin: 0 1 0 0;
+        min-width: 10;
+    }
+
+    #report_content {
+        width: 100%;
+        height: 1fr;
+        overflow-y: auto;
+    }
+
+    #close_button {
+        margin: 1 0 0 0;
+        width: 100%;
+    }
+    """
+
+    def __init__(self, db, tasks_table, filtered_rows=None):
+        super().__init__()
+        self.db = db
+        self.tasks_table = tasks_table
+        self.filtered_rows = filtered_rows or []
+        self.period = "month"
+
+    def action_dismiss(self) -> None:
+        """Close and return to home screen."""
+        self.app.pop_screen()
+
+    def action_change_period_day(self) -> None:
+        """Change period to day."""
+        self.period = "day"
+        self.refresh_report()
+
+    def action_change_period_week(self) -> None:
+        """Change period to week."""
+        self.period = "week"
+        self.refresh_report()
+
+    def action_change_period_month(self) -> None:
+        """Change period to month."""
+        self.period = "month"
+        self.refresh_report()
+
+    def action_change_period_year(self) -> None:
+        """Change period to year."""
+        self.period = "year"
+        self.refresh_report()
+
+    def compose(self) -> ComposeResult:
+        with Container(id="report_dialog"):
+            yield Label("Task Metrics Report", id="report_title")
+            with Horizontal(id="period_buttons"):
+                yield Button("Day (d)", id="period_day", variant="default")
+                yield Button("Week (w)", id="period_week", variant="default")
+                yield Button("Month (m)", id="period_month", variant="primary")
+                yield Button("Year (y)", id="period_year", variant="default")
+            yield Container(id="report_content")
+            yield Button("Close (Esc)", variant="primary", id="close_button")
+
+    def on_mount(self) -> None:
+        """Generate and display the report when screen mounts."""
+        self.refresh_report()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "close_button":
+            self.app.pop_screen()
+        elif event.button.id == "period_day":
+            self.period = "day"
+            self.refresh_report()
+        elif event.button.id == "period_week":
+            self.period = "week"
+            self.refresh_report()
+        elif event.button.id == "period_month":
+            self.period = "month"
+            self.refresh_report()
+        elif event.button.id == "period_year":
+            self.period = "year"
+            self.refresh_report()
+
+        # Update button variants to show active period
+        for button_id in ["period_day", "period_week", "period_month", "period_year"]:
+            button = self.query_one(f"#{button_id}", Button)
+            if button_id == f"period_{self.period}":
+                button.variant = "primary"
+            else:
+                button.variant = "default"
+
+    def refresh_report(self) -> None:
+        """Refresh the report with current period."""
+        from .reports import calculate_metrics
+        from .taskmodel import Task
+
+        # Convert rows to Task objects
+        task_objects = [Task.from_row(self.db, row) for row in self.filtered_rows]
+
+        # Calculate metrics
+        metrics = calculate_metrics(task_objects, period=self.period)
+
+        # Generate report content with charts
+        from textual_plotext import PlotextPlot
+
+        content_container = self.query_one("#report_content", Container)
+        content_container.remove_children()
+
+        # Summary statistics
+        summary = Static(
+            f"[bold cyan]Total Tasks:[/bold cyan] {metrics['total_tasks']}\n"
+            f"[bold cyan]Period:[/bold cyan] {self.period.title()}\n"
+        )
+        content_container.mount(summary)
+
+        # Status distribution chart
+        if metrics['status_totals']:
+            status_label = Static("[bold yellow]Tasks by Status:[/bold yellow]")
+            content_container.mount(status_label)
+
+            # Create bar chart data
+            statuses = list(metrics['status_totals'].keys())
+            counts = list(metrics['status_totals'].values())
+
+            # Define colors for each status
+            status_colors = {
+                'new': 'cyan',
+                'in-progress': 'yellow',
+                'done': 'green',
+                'cancel': 'red',
+                'post': 'magenta',
+            }
+
+            # Create a custom text-based horizontal bar chart with colors
+            max_count = max(counts) if counts else 1
+            bar_width = 60  # Maximum bar width in characters
+
+            chart_lines = ["[bold white]Tasks by Status[/bold white]", ""]
+            for i, (status, count) in enumerate(zip(statuses, counts)):
+                color = status_colors.get(status, 'white')
+                pct = metrics['status_percentages'][status]
+
+                # Calculate bar length
+                bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+                bar = "█" * bar_length
+
+                # Alternate background for row
+                if i % 2 == 0:
+                    # With background
+                    chart_lines.append(
+                        f"[on grey11]{status:12s}[/] [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                    )
+                else:
+                    # Without background
+                    chart_lines.append(
+                        f"{status:12s} [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                    )
+
+            content_container.mount(Static("\n".join(chart_lines) + "\n"))
+
+        # Tag distribution chart
+        if metrics['tag_totals']:
+            tag_label = Static("[bold yellow]Tasks by Tag:[/bold yellow]")
+            content_container.mount(tag_label)
+
+            tags = list(metrics['tag_totals'].keys())
+            tag_counts = list(metrics['tag_totals'].values())
+
+            # Use a variety of colors for tags
+            tag_colors = ['cyan', 'yellow', 'green', 'magenta', 'blue', 'red']
+
+            # Create a custom text-based horizontal bar chart with colors
+            max_count = max(tag_counts) if tag_counts else 1
+            bar_width = 60  # Maximum bar width in characters
+
+            chart_lines = ["[bold white]Tasks by Tag[/bold white]", ""]
+            for i, (tag, count) in enumerate(zip(tags, tag_counts)):
+                color = tag_colors[i % len(tag_colors)]
+                pct = metrics['tag_percentages'][tag]
+
+                # Calculate bar length
+                bar_length = int((count / max_count) * bar_width) if max_count > 0 else 0
+                bar = "█" * bar_length
+
+                # Alternate background for row
+                if i % 2 == 0:
+                    # With background
+                    chart_lines.append(
+                        f"[on grey11]{tag:12s}[/] [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                    )
+                else:
+                    # Without background
+                    chart_lines.append(
+                        f"{tag:12s} [{color}]{bar}[/] [{color} bold]{count:3d}[/] [dim]({pct:.1f}%)[/]"
+                    )
+
+            content_container.mount(Static("\n".join(chart_lines) + "\n"))
+
+        # Tasks over time
+        if metrics['total_by_period'] and len(metrics['total_by_period']) > 1:
+            period_label = Static("[bold yellow]Tasks by Period:[/bold yellow]")
+            content_container.mount(period_label)
+
+            periods = sorted(metrics['total_by_period'].keys())
+            period_counts = [metrics['total_by_period'][p] for p in periods]
+
+            # Use PlotextPlot for line chart
+            plot3 = PlotextPlot()
+            content_container.mount(plot3)
+
+            # Access plt and create the plot
+            plt3 = plot3.plt
+            plt3.plot(list(range(len(periods))), period_counts, marker="dot", color="cyan")
+            plt3.title(f"Tasks Created by {self.period.title()}")
+
+            # Add period breakdown
+            breakdown = "\n".join(
+                f"  {period}: {count}"
+                for period, count in zip(periods, period_counts)
+            )
+            content_container.mount(Static(breakdown))
 
 
 class DoListCommandProvider(Provider):
@@ -1131,7 +1396,8 @@ class DoListTUI(App):
         Binding("enter", "edit_task", "Edit", show=False),
         Binding("s", "cycle_status", "Status"),
         Binding("space", "toggle_selection", "Sel", show=False),
-        Binding("r", "refresh", "Refresh", show=False),
+        Binding("r", "show_report", "Report"),
+        Binding("f5", "refresh", "Refresh", show=False),
         Binding("x", "toggle_autorefresh", "Auto-Refresh", show=False),
         Binding("/", "open_search", "Search"),
         Binding(":", "command_palette", "Commands"),
@@ -2011,6 +2277,21 @@ class DoListTUI(App):
     def action_refresh(self) -> None:
         """Refresh the task list."""
         self.refresh_tasks()
+
+    def action_show_report(self) -> None:
+        """Show the report screen with metrics and charts."""
+        # Get all currently visible rows from the table
+        table = self.query_one("#tasks_table", DataTable)
+        visible_rows = []
+
+        for row_key in table.rows:
+            task_id = int(row_key.value)
+            task_row = self._tasks_table[task_id]
+            if task_row:
+                visible_rows.append(task_row)
+
+        # Show the report screen with filtered data
+        self.push_screen(ReportScreen(self.db, self._tasks_table, visible_rows))
 
     def action_toggle_autorefresh(self) -> None:
         """Toggle auto-refresh on/off (Task 6)."""

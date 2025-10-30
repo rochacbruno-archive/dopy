@@ -32,6 +32,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "ptpython>=3.0.0",
     "tomli>=2.0.0; python_version<'3.11'",
+    "textual-plotext>=1.0.1",
+    "uniplot>=0.21.4",
 ]
 
 [project.urls]
