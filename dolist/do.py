@@ -1237,6 +1237,9 @@ def ls(
                     reminder_display = ""
                 else:
                     reminder_display = get_time_until(row.reminder_timestamp)
+                    # Add (r) indicator for repeating reminders
+                    if row.get("reminder_repeat"):
+                        reminder_display = f"{reminder_display} (r)"
 
             task_data = {
                 "id": row.id,
@@ -1316,6 +1319,9 @@ def ls(
             else:
                 # Show time until reminder
                 reminder_display = get_time_until(row.reminder_timestamp)
+                # Add (r) indicator for repeating reminders
+                if row.get("reminder_repeat"):
+                    reminder_display = f"{reminder_display} (r)"
 
         # Store reminder display for use in lambda
         row._reminder_display = reminder_display

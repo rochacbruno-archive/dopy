@@ -824,6 +824,7 @@ In the TUI, use the "Clear Reminder" button in the edit dialog.
 
 **Smart Display:**
 - When listing tasks, reminders show as "in 2 hours", "in 30 minutes", etc.
+- Repeating reminders are indicated with "(r)" suffix (e.g., "in 2 hours (r)")
 - Past reminders are automatically cleared when viewing task lists
 - Done/cancelled tasks will not trigger reminder notifications
 

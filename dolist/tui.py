@@ -1742,6 +1742,9 @@ class DoListTUI(App):
                 else:
                     # Show time until reminder
                     reminder_display = get_time_until(row.reminder_timestamp)
+                    # Add (r) indicator for repeating reminders
+                    if row.get("reminder_repeat"):
+                        reminder_display = f"{reminder_display} (r)"
 
             # Build row data based on column configuration
             row_data = {}
