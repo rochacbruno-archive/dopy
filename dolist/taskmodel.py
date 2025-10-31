@@ -132,6 +132,32 @@ class Task(BaseModel):
         self.priority = value
         self._update_db(priority=value)
 
+    def increment_priority(self, amount: int = 1) -> int:
+        """Increment the task priority (max 99).
+
+        Args:
+            amount: Amount to increment by (default: 1)
+
+        Returns:
+            New priority value
+        """
+        new_priority = min(99, self.priority + amount)
+        self.update_priority(new_priority)
+        return new_priority
+
+    def decrement_priority(self, amount: int = 1) -> int:
+        """Decrement the task priority (min 0).
+
+        Args:
+            amount: Amount to decrement by (default: 1)
+
+        Returns:
+            New priority value
+        """
+        new_priority = max(0, self.priority - amount)
+        self.update_priority(new_priority)
+        return new_priority
+
     def update_size(self, value: str):
         """Update the task size."""
         # Validate and normalize the size value

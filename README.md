@@ -327,6 +327,8 @@ Features of TUI mode:
 |-----|--------|-------------|
 | `a` | Add Task | Open dialog to create new task |
 | `Enter` | Edit Task | Edit the selected task |
+| `Alt+Up` | Priority +1 | Increase priority (max: 99) |
+| `Alt+Down` | Priority -1 | Decrease priority (min: 0) |
 | `/` | Search | Open vim-like search overlay |
 | `:` | Commands | Open command palette for sorting and actions |
 | `?` | Help | Show all key bindings |
@@ -389,7 +391,17 @@ Click on any column header to sort by that column:
 - First click: Sort ascending (▲)
 - Second click: Sort descending (▼)
 
-Sortable columns: ID, Name, Tag, Status, Created
+Sortable columns: ID, Name, Tag, Status, Created, Priority, Size
+
+**Note:** By default, tasks are sorted by priority (descending) to show high-priority tasks first.
+
+#### Quick Priority Adjustment
+
+You can quickly adjust task priority without opening the edit dialog:
+- `Alt+Up` - Increase priority by 1 (max: 99)
+- `Alt+Down` - Decrease priority by 1 (min: 0)
+
+The view will refresh immediately, and if you're sorting by priority, the task will move to its new position.
 
 #### Status Filters
 

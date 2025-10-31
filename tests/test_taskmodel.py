@@ -327,3 +327,110 @@ class TestTaskEdgeCases:
 
         assert task.created_on is not None
         assert isinstance(task.created_on, datetime)
+
+
+class TestTaskPriorityAdjustment:
+    """Test priority increment/decrement functionality."""
+
+    @pytest.fixture
+    def mock_db(self):
+        """Create a mock database."""
+        db = Mock()
+        db.commit = Mock()
+        return db
+
+    @pytest.fixture
+    def mock_row(self):
+        """Create a mock row object with priority."""
+        row = Mock()
+        row.id = 1
+        row.name = "Test Task"
+        row.tag = "work"
+        row.status = "new"
+        row.reminder = None
+        row.reminder_repeat = None
+        row.notes = []
+        row.created_on = datetime.now()
+        row.deleted = False
+        row.priority = 0
+        row.size = "U"
+        row.update_record = Mock()
+        row.delete_record = Mock()
+        row.get = lambda k, d=None: getattr(row, k, d)
+        return row
+
+    @pytest.fixture
+    def task(self, mock_db, mock_row):
+        """Create a Task instance with mocks."""
+        return Task.from_row(mock_db, mock_row)
+
+    def test_increment_priority(self, task):
+        """Test incrementing task priority."""
+        # Initial priority is 0
+        assert task.priority == 0
+
+        # Increment by 1
+        new_priority = task.increment_priority()
+        assert new_priority == 1
+        assert task.priority == 1
+        task._row.update_record.assert_called_with(priority=1)
+
+        # Increment by 5
+        new_priority = task.increment_priority(5)
+        assert new_priority == 6
+        assert task.priority == 6
+
+    def test_increment_priority_max_limit(self, task):
+        """Test that priority cannot exceed 99."""
+        # Set priority to 98
+        task.priority = 98
+
+        # Increment by 1 - should become 99
+        new_priority = task.increment_priority()
+        assert new_priority == 99
+        assert task.priority == 99
+
+        # Try to increment again - should stay at 99
+        new_priority = task.increment_priority()
+        assert new_priority == 99
+        assert task.priority == 99
+
+        # Try to increment by 10 - should stay at 99
+        new_priority = task.increment_priority(10)
+        assert new_priority == 99
+        assert task.priority == 99
+
+    def test_decrement_priority(self, task):
+        """Test decrementing task priority."""
+        # Set priority to 5
+        task.priority = 5
+
+        # Decrement by 1
+        new_priority = task.decrement_priority()
+        assert new_priority == 4
+        assert task.priority == 4
+
+        # Decrement by 3
+        new_priority = task.decrement_priority(3)
+        assert new_priority == 1
+        assert task.priority == 1
+
+    def test_decrement_priority_min_limit(self, task):
+        """Test that priority cannot go below 0."""
+        # Set priority to 1
+        task.priority = 1
+
+        # Decrement by 1 - should become 0
+        new_priority = task.decrement_priority()
+        assert new_priority == 0
+        assert task.priority == 0
+
+        # Try to decrement again - should stay at 0
+        new_priority = task.decrement_priority()
+        assert new_priority == 0
+        assert task.priority == 0
+
+        # Try to decrement by 10 - should stay at 0
+        new_priority = task.decrement_priority(10)
+        assert new_priority == 0
+        assert task.priority == 0

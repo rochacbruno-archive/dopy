@@ -931,6 +931,8 @@ class KeyBindingsHelpScreen(ModalScreen):
             ("d", "Delete selected task(s)"),
             ("s", "Cycle task status (new → in-progress → done → post → cancel)"),
             ("Space", "Toggle task selection (for bulk operations)"),
+            ("Alt+Up", "Increase priority (+1, max: 99)"),
+            ("Alt+Down", "Decrease priority (-1, min: 0)"),
             ("", ""),
             ("Navigation & Search", ""),
             ("/", "Open search overlay (vim-style)"),
@@ -1394,6 +1396,9 @@ class DoListTUI(App):
         Binding("ctrl+d", "filter_done", "", show=False),
         Binding("ctrl+c", "filter_cancel", "", show=False),
         Binding("ctrl+p", "filter_post", "", show=False),
+        # Priority adjustment
+        Binding("alt+up", "increase_priority", "Priority +", show=False),
+        Binding("alt+down", "decrease_priority", "Priority -", show=False),
         # Visible bindings in footer
         Binding("a", "add_task", "Add"),
         Binding("d", "delete_task", "Del"),
@@ -2424,6 +2429,80 @@ class DoListTUI(App):
         self.search_filter = {"under": task_id}
         self.refresh_tasks()
         self.notify(f"Showing children of task #{task_id}", severity="information")
+
+    def action_increase_priority(self) -> None:
+        """Increase priority of selected task by 1 (Alt+Up)."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None or not table.rows:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the task ID from the row key
+        row_key = list(table.rows)[table.cursor_row]
+        task_id = int(row_key.value)
+        task_row = self._tasks_table[task_id]
+
+        if not task_row:
+            self.notify("Task not found", severity="error")
+            return
+
+        # Get current priority
+        current_priority = task_row.get("priority", 0)
+
+        # Check if already at max
+        if current_priority >= 99:
+            self.notify("Priority already at maximum (99)", severity="warning")
+            return
+
+        # Increment priority
+        new_priority = min(99, current_priority + 1)
+        task_row.update_record(priority=new_priority)
+        self.db.commit()
+
+        # Record history
+        if hasattr(self, "_record_task_history"):
+            self._record_task_history(task_row)
+
+        # Refresh immediately
+        self.refresh_tasks()
+        self.notify(f"Priority: {current_priority} → {new_priority}", severity="information")
+
+    def action_decrease_priority(self) -> None:
+        """Decrease priority of selected task by 1 (Alt+Down)."""
+        table = self.query_one("#tasks_table", DataTable)
+        if table.cursor_row is None or not table.rows:
+            self.notify("No task selected", severity="warning")
+            return
+
+        # Get the task ID from the row key
+        row_key = list(table.rows)[table.cursor_row]
+        task_id = int(row_key.value)
+        task_row = self._tasks_table[task_id]
+
+        if not task_row:
+            self.notify("Task not found", severity="error")
+            return
+
+        # Get current priority
+        current_priority = task_row.get("priority", 0)
+
+        # Check if already at min
+        if current_priority <= 0:
+            self.notify("Priority already at minimum (0)", severity="warning")
+            return
+
+        # Decrement priority
+        new_priority = max(0, current_priority - 1)
+        task_row.update_record(priority=new_priority)
+        self.db.commit()
+
+        # Record history
+        if hasattr(self, "_record_task_history"):
+            self._record_task_history(task_row)
+
+        # Refresh immediately
+        self.refresh_tasks()
+        self.notify(f"Priority: {current_priority} → {new_priority}", severity="information")
 
     def switch_database(self, new_db_path: str) -> None:
         """Switch to a different database.
