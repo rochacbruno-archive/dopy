@@ -16,15 +16,16 @@ class TestDatabaseFunction:
         mock_database_class.return_value = mock_db
         mock_db.define_table = Mock(return_value="tasks_table")
 
-        db, tasks, history = database("sqlite://test.db")
+        db, tasks, history, state = database("sqlite://test.db")
 
         # Should create Database with correct parameters
         mock_database_class.assert_called_once_with("sqlite://test.db", folder=DBDIR)
-        # Should define the tasks table (both tasks and history)
+        # Should define tables (tasks, history, and state)
         assert mock_db.define_table.called
         assert db == mock_db
         assert tasks == "tasks_table"
         assert history == "tasks_table"
+        assert state == "tasks_table"
 
     @patch("dolist.do.Database")
     def test_database_defines_correct_schema(self, mock_database_class):
@@ -35,10 +36,10 @@ class TestDatabaseFunction:
         mock_database_class.return_value = mock_db
         mock_db.define_table = Mock(return_value="tasks_table")
 
-        db, tasks, history = database("sqlite://test.db")
+        db, tasks, history, state = database("sqlite://test.db")
 
-        # Check that define_table was called twice (tasks and history)
-        assert mock_db.define_table.call_count == 2
+        # Check that define_table was called 3 times (tasks, history, and state)
+        assert mock_db.define_table.call_count == 3
 
         # Check the first call was for tasks table
         first_call_args = mock_db.define_table.call_args_list[0]
@@ -63,7 +64,8 @@ class TestInitDbFunction:
         mock_db = Mock()
         mock_tasks = Mock()
         mock_history = Mock()
-        mock_database.return_value = (mock_db, mock_tasks, mock_history)
+        mock_state = Mock()
+        mock_database.return_value = (mock_db, mock_tasks, mock_history, mock_state)
 
         dburi = init_db()
 
@@ -81,7 +83,8 @@ class TestInitDbFunction:
         mock_db = Mock()
         mock_tasks = Mock()
         mock_history = Mock()
-        mock_database.return_value = (mock_db, mock_tasks, mock_history)
+        mock_state = Mock()
+        mock_database.return_value = (mock_db, mock_tasks, mock_history, mock_state)
 
         dburi = init_db("customdb")
 

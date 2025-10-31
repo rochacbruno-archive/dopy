@@ -977,6 +977,167 @@ class KeyBindingsHelpScreen(ModalScreen):
             self.app.pop_screen()
 
 
+class SortModal(ModalScreen):
+    """Modal screen for configuring multi-column sorting."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Cancel"),
+    ]
+
+    CSS = """
+    SortModal {
+        align: center middle;
+    }
+
+    #sort_dialog {
+        width: 70%;
+        max-width: 80;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+
+    #sort_dialog Label {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #sort_dialog Horizontal {
+        width: 100%;
+        margin: 1 0;
+    }
+
+    #sort_dialog Select {
+        width: 1fr;
+        margin: 0 1 0 0;
+    }
+
+    #sort_dialog .sort_row {
+        width: 100%;
+        height: auto;
+    }
+
+    #sort_dialog .button_row {
+        width: 100%;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #sort_dialog Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, columns_config, current_sort_fields=None):
+        """Initialize sort modal.
+
+        Args:
+            columns_config: List of column names available for sorting
+            current_sort_fields: List of (column, direction) tuples for current sort
+        """
+        super().__init__()
+        self.columns_config = columns_config
+        self.current_sort_fields = current_sort_fields or []
+        self.max_sort_rows = 3  # Maximum number of sorting fields
+
+    def action_dismiss(self) -> None:
+        """Cancel and return to home screen."""
+        self.app.pop_screen()
+
+    def compose(self) -> ComposeResult:
+        # Build column options for dropdowns
+        # Filter out non-sortable columns
+        sortable_columns = [
+            col for col in self.columns_config if col not in ["reminder", "notes"]
+        ]
+
+        # Map column names to display names
+        column_display_map = {
+            "id": "ID",
+            "name": "Name",
+            "tag": "Tag",
+            "status": "Status",
+            "created": "Created",
+            "priority": "Priority",
+            "size": "Size",
+        }
+
+        # Build options: [("Display Name", "column_name"), ...]
+        column_options = [("(None)", "")]
+        for col in sortable_columns:
+            display_name = column_display_map.get(col, col.title())
+            column_options.append((display_name, col))
+
+        with Container(id="sort_dialog"):
+            yield Label("Configure Sorting")
+            yield Label("Select up to 3 columns to sort by (in order of priority):")
+
+            # Create 3 sort rows
+            for i in range(self.max_sort_rows):
+                with Horizontal(classes="sort_row"):
+                    # Get current values if they exist
+                    current_col = ""
+                    current_dir = "asc"
+                    if i < len(self.current_sort_fields):
+                        current_col = self.current_sort_fields[i][0]
+                        current_dir = self.current_sort_fields[i][1]
+
+                    # Column dropdown
+                    yield Select(
+                        options=column_options,
+                        value=current_col,
+                        allow_blank=False,
+                        prompt=f"Sort {i + 1}",
+                        id=f"column_{i}",
+                    )
+
+                    # Direction dropdown
+                    yield Select(
+                        options=[
+                            ("Ascending (▲)", "asc"),
+                            ("Descending (▼)", "desc"),
+                        ],
+                        value=current_dir,
+                        allow_blank=False,
+                        prompt="Direction",
+                        id=f"direction_{i}",
+                    )
+
+            with Horizontal(classes="button_row"):
+                yield Button("Apply", variant="primary", id="apply_btn")
+                yield Button("Reset", variant="warning", id="reset_btn")
+                yield Button("Cancel", variant="default", id="cancel_btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel_btn":
+            self.app.pop_screen()
+        elif event.button.id == "reset_btn":
+            # Reset to default sorting
+            if hasattr(self.app, "reset_sort"):
+                self.app.reset_sort()
+            self.app.pop_screen()
+        elif event.button.id == "apply_btn":
+            # Gather sort configuration
+            sort_fields = []
+            for i in range(self.max_sort_rows):
+                column_select = self.query_one(f"#column_{i}", Select)
+                direction_select = self.query_one(f"#direction_{i}", Select)
+
+                column = column_select.value
+                direction = direction_select.value
+
+                # Only add if column is selected (not empty)
+                if column:
+                    sort_fields.append((column, direction))
+
+            # Apply the sort configuration
+            if hasattr(self.app, "apply_sort_configuration"):
+                self.app.apply_sort_configuration(sort_fields)
+
+            self.app.pop_screen()
+
+
 class ReportScreen(ModalScreen):
     """Modal screen showing task metrics and charts."""
 
@@ -1247,48 +1408,11 @@ class ReportScreen(ModalScreen):
 
 
 class DoListCommandProvider(Provider):
-    """Custom command provider for DoList TUI (Task 4)."""
+    """Custom command provider for DoList TUI."""
 
     # Define available commands as a class constant for reuse
     COMMANDS = [
-        (
-            "Sort by Name (A-Z)",
-            "sort-name-asc",
-            "Sort tasks by name in ascending order",
-        ),
-        (
-            "Sort by Name (Z-A)",
-            "sort-name-desc",
-            "Sort tasks by name in descending order",
-        ),
-        (
-            "Sort by Created (Oldest)",
-            "sort-created-asc",
-            "Sort tasks by creation date (oldest first)",
-        ),
-        (
-            "Sort by Created (Newest)",
-            "sort-created-desc",
-            "Sort tasks by creation date (newest first)",
-        ),
-        (
-            "Sort by Status (A-Z)",
-            "sort-status-asc",
-            "Sort tasks by status in ascending order",
-        ),
-        (
-            "Sort by Status (Z-A)",
-            "sort-status-desc",
-            "Sort tasks by status in descending order",
-        ),
-        ("Sort by Tag (A-Z)", "sort-tag-asc", "Sort tasks by tag in ascending order"),
-        ("Sort by Tag (Z-A)", "sort-tag-desc", "Sort tasks by tag in descending order"),
-        ("Sort by ID (Low-High)", "sort-id-asc", "Sort tasks by ID in ascending order"),
-        (
-            "Sort by ID (High-Low)",
-            "sort-id-desc",
-            "Sort tasks by ID in descending order",
-        ),
+        ("Sort", "sort", "Configure multi-column sorting"),
         ("Refresh", "refresh", "Manually refresh the task list"),
         ("Quit", "quit", "Exit the TUI"),
     ]
@@ -1419,11 +1543,14 @@ class DoListTUI(App):
         Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
 
-    def __init__(self, db, tasks_table, config=None, history_table=None):
+    def __init__(
+        self, db, tasks_table, config=None, history_table=None, state_table=None
+    ):
         super().__init__()
         self.db = db
         self._tasks_table = tasks_table  # Use underscore prefix to avoid conflicts
         self._history_table = history_table  # History table for tracking changes
+        self._state_table = state_table  # State table for persistent UI state
         self.current_filter = {
             "tag": None,
             "status": None,
@@ -1445,11 +1572,9 @@ class DoListTUI(App):
         # Task 3: State for search filters
         self.search_filter = {}  # Dict with 'tag', 'status', 'text' keys
 
-        # Task 7: State for sorting and scroll preservation
-        self.sort_column = "priority"  # Default sort by priority (as per requirements)
-        self.sort_direction = (
-            "desc"  # 'asc' or 'desc' - desc for priority to show high priority first
-        )
+        # Multi-column sorting state: list of (column, direction) tuples
+        # Default: sort by priority desc (high priority first)
+        self.sort_fields = [("priority", "desc")]
         self.last_scroll_y = 0
         self.last_selected_task_id = None
 
@@ -1595,7 +1720,9 @@ class DoListTUI(App):
             else:
                 # No active search filter - show total task count
                 task_word = "task" if result_count == 1 else "tasks"
-                search_status.update(f"[bold cyan]{result_count} {task_word}[/bold cyan]")
+                search_status.update(
+                    f"[bold cyan]{result_count} {task_word}[/bold cyan]"
+                )
         except Exception:
             pass
 
@@ -1604,6 +1731,9 @@ class DoListTUI(App):
         # Load theme from config
         theme = self.config.get("theme", "textual-dark")
         self.theme = theme
+
+        # Load sort state from database
+        self._load_sort_state()
 
         table = self.query_one("#tasks_table", DataTable)
         # Task 5: Add columns (they are clickable by default in Textual)
@@ -1624,7 +1754,7 @@ class DoListTUI(App):
         )
 
         # Map column names to display names
-        column_display_map = {
+        self.column_display_map = {
             "id": "ID",
             "name": "Name",
             "tag": "Tag",
@@ -1636,14 +1766,12 @@ class DoListTUI(App):
             "size": "Size",
         }
 
-        # Add columns based on configuration
-        display_columns = [
-            column_display_map.get(col, col.title()) for col in columns_config
-        ]
-        table.add_columns(*display_columns)
-
         # Store column configuration for row building
         self.columns_config = columns_config
+
+        # Add columns with sort indicators
+        display_columns = self._get_column_headers_with_indicators()
+        table.add_columns(*display_columns)
 
         self.refresh_tasks()
 
@@ -1731,7 +1859,7 @@ class DoListTUI(App):
                     break
 
     def apply_sort(self, rows):
-        """Apply current sort to rows (Task 7).
+        """Apply multi-column sort to rows.
 
         Args:
             rows: List of database rows to sort
@@ -1739,39 +1867,92 @@ class DoListTUI(App):
         Returns:
             Sorted list of rows
         """
-        if not self.sort_column:
+        if not self.sort_fields:
             return list(rows)
 
-        reverse = self.sort_direction == "desc"
         rows_list = list(rows)
 
-        if self.sort_column == "name":
-            return sorted(rows_list, key=lambda r: r.name.lower(), reverse=reverse)
-        elif self.sort_column == "created":
-            return sorted(rows_list, key=lambda r: r.created_on, reverse=reverse)
-        elif self.sort_column == "status":
-            return sorted(rows_list, key=lambda r: r.status, reverse=reverse)
-        elif self.sort_column == "tag":
-            return sorted(rows_list, key=lambda r: r.tag.lower(), reverse=reverse)
-        elif self.sort_column == "id":
-            return sorted(rows_list, key=lambda r: r.id, reverse=reverse)
-        elif self.sort_column == "priority":
-            # Sort by priority first, then by created_on as secondary sort (newest first)
-            return sorted(
-                rows_list,
-                key=lambda r: (r.get("priority", 0), r.created_on),
-                reverse=reverse,
-            )
-        elif self.sort_column == "size":
-            # Sort by size with order: U, S, M, L
-            size_order = {"U": 0, "S": 1, "M": 2, "L": 3}
-            return sorted(
-                rows_list,
-                key=lambda r: size_order.get(r.get("size", "U"), 0),
-                reverse=reverse,
-            )
+        def get_sort_key(row):
+            """Build a composite sort key for multi-column sorting."""
+            key_parts = []
+            for column, direction in self.sort_fields:
+                if column == "name":
+                    value = row.name.lower()
+                elif column == "created":
+                    value = row.created_on
+                elif column == "status":
+                    value = row.status
+                elif column == "tag":
+                    value = row.tag.lower()
+                elif column == "id":
+                    value = row.id
+                elif column == "priority":
+                    value = row.get("priority", 0)
+                elif column == "size":
+                    # Sort by size with order: U, S, M, L
+                    size_order = {"U": 0, "S": 1, "M": 2, "L": 3}
+                    value = size_order.get(row.get("size", "U"), 0)
+                else:
+                    value = ""
 
-        return rows_list
+                # Negate numeric values for descending sort
+                if direction == "desc":
+                    if isinstance(value, (int, float)):
+                        value = -value
+                    elif isinstance(value, str):
+                        # For strings, we'll handle this differently in the sort
+                        pass
+                    elif hasattr(value, "__lt__"):
+                        # For datetime and other comparable types
+                        pass
+
+                key_parts.append((value, direction))
+
+            return key_parts
+
+        # Sort with custom key
+        # We need to handle mixed asc/desc for different columns
+        from functools import cmp_to_key
+
+        def compare_rows(row1, row2):
+            """Compare two rows based on multi-column sort criteria."""
+            for column, direction in self.sort_fields:
+                if column == "name":
+                    val1, val2 = row1.name.lower(), row2.name.lower()
+                elif column == "created":
+                    val1, val2 = row1.created_on, row2.created_on
+                elif column == "status":
+                    val1, val2 = row1.status, row2.status
+                elif column == "tag":
+                    val1, val2 = row1.tag.lower(), row2.tag.lower()
+                elif column == "id":
+                    val1, val2 = row1.id, row2.id
+                elif column == "priority":
+                    val1, val2 = row1.get("priority", 0), row2.get("priority", 0)
+                elif column == "size":
+                    size_order = {"U": 0, "S": 1, "M": 2, "L": 3}
+                    val1 = size_order.get(row1.get("size", "U"), 0)
+                    val2 = size_order.get(row2.get("size", "U"), 0)
+                else:
+                    continue
+
+                # Compare values
+                if val1 < val2:
+                    result = -1
+                elif val1 > val2:
+                    result = 1
+                else:
+                    continue  # Values are equal, check next sort field
+
+                # Apply direction
+                if direction == "desc":
+                    result = -result
+
+                return result
+
+            return 0  # All sort fields are equal
+
+        return sorted(rows_list, key=cmp_to_key(compare_rows))
 
     def refresh_tasks(self) -> None:
         """Refresh the task list with state preservation (Task 7)."""
@@ -1791,8 +1972,12 @@ class DoListTUI(App):
             except Exception:
                 self.last_selected_task_id = None
 
-        # Clear table
-        table.clear()
+        # Clear table (including columns to update headers with sort indicators)
+        table.clear(columns=True)
+
+        # Re-add columns with updated sort indicators
+        headers = self._get_column_headers_with_indicators()
+        table.add_columns(*headers)
 
         # Build query
         query = self._tasks_table.deleted != True  # noqa: E712
@@ -2343,6 +2528,37 @@ class DoListTUI(App):
         """Open the search overlay (Task 3)."""
         self.push_screen(SearchOverlay())
 
+    def action_open_sort_modal(self) -> None:
+        """Open the sort configuration modal."""
+        self.push_screen(SortModal(self.columns_config, self.sort_fields))
+
+    def apply_sort_configuration(self, sort_fields):
+        """Apply the sort configuration from the modal.
+
+        Args:
+            sort_fields: List of (column, direction) tuples
+        """
+        self.sort_fields = sort_fields if sort_fields else [("priority", "desc")]
+        # Save to state table
+        self._save_sort_state()
+        # Notify user
+        if sort_fields:
+            sort_desc = ", ".join([f"{col} {dir}" for col, dir in sort_fields])
+            self.notify(f"Sorting by: {sort_desc}", severity="information")
+        else:
+            self.notify("Sorting reset to default", severity="information")
+        # Refresh with new sort (this will update column headers automatically)
+        self.refresh_tasks()
+
+    def reset_sort(self):
+        """Reset sorting to default (priority desc)."""
+        self.sort_fields = [("priority", "desc")]
+        # Save to state table
+        self._save_sort_state()
+        self.notify("Sorting reset to default (priority desc)", severity="information")
+        # Refresh with new sort (this will update column headers automatically)
+        self.refresh_tasks()
+
     def action_switch_db(self) -> None:
         """Open the database switch screen."""
         if not self.config_dir:
@@ -2465,7 +2681,9 @@ class DoListTUI(App):
 
         # Refresh immediately
         self.refresh_tasks()
-        self.notify(f"Priority: {current_priority} → {new_priority}", severity="information")
+        self.notify(
+            f"Priority: {current_priority} → {new_priority}", severity="information"
+        )
 
     def action_decrease_priority(self) -> None:
         """Decrease priority of selected task by 1 (Alt+Down)."""
@@ -2502,7 +2720,9 @@ class DoListTUI(App):
 
         # Refresh immediately
         self.refresh_tasks()
-        self.notify(f"Priority: {current_priority} → {new_priority}", severity="information")
+        self.notify(
+            f"Priority: {current_priority} → {new_priority}", severity="information"
+        )
 
     def switch_database(self, new_db_path: str) -> None:
         """Switch to a different database.
@@ -2671,7 +2891,7 @@ class DoListTUI(App):
         self.refresh_tasks()
 
     def run_command(self, command: str) -> None:
-        """Execute a custom command (Task 4).
+        """Execute a custom command.
 
         Args:
             command: The command name to execute
@@ -2680,22 +2900,9 @@ class DoListTUI(App):
             self.action_refresh()
         elif command == "quit":
             self.action_quit()
-        elif command.startswith("sort-"):
-            # Parse sort command: sort-{column}-{direction}
-            parts = command.split("-")
-            if len(parts) == 3:
-                _, column, direction = parts
-                self.sort_column = column
-                self.sort_direction = direction
-
-                # Notify user of sort change
-                direction_text = "ascending" if direction == "asc" else "descending"
-                self.notify(
-                    f"Sorted by {column} ({direction_text})", severity="information"
-                )
-
-                # Refresh with new sort
-                self.refresh_tasks()
+        elif command == "sort":
+            # Open the sort modal
+            self.action_open_sort_modal()
 
     def _restore_table_focus(self) -> None:
         """Restore focus to the tasks table (Task 9)."""
@@ -2777,7 +2984,12 @@ class DoListTUI(App):
         self.action_edit_task()
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        """Handle column header click for sorting (Task 5)."""
+        """Handle column header click for sorting.
+
+        Clicking a column header will:
+        - Set it as the primary (only) sort column with ascending direction
+        - If already the primary column, toggle between asc/desc
+        """
         # Map column labels to internal column names
         column_map = {
             "ID": "id",
@@ -2791,15 +3003,14 @@ class DoListTUI(App):
             "Notes": "notes",
         }
 
-        # Get the column label from the event - use .label which is a Rich Text object
+        # Strip sort indicators from column label
         column_label = (
             str(event.label.plain)
             if hasattr(event.label, "plain")
             else str(event.label)
         )
-
-        # Debug: notify that event was received
-        # self.notify(f"Header clicked: {column_label}", severity="information")
+        # Remove indicators
+        column_label = column_label.replace(" ▲", "").replace(" ▼", "")
 
         # Don't sort by Reminder or Notes columns
         if column_label in ["Reminder", "Notes"]:
@@ -2811,31 +3022,119 @@ class DoListTUI(App):
             self.notify(f"Unknown column: {column_label}", severity="error")
             return
 
-        # Toggle sort: if same column, toggle direction; if new column, start with asc
-        if self.sort_column == column_name:
-            self.sort_direction = "desc" if self.sort_direction == "asc" else "asc"
-        else:
-            self.sort_column = column_name
-            self.sort_direction = "asc"
+        # Check if this column is already the primary sort column
+        current_primary = self.sort_fields[0] if self.sort_fields else None
 
-        # Notify user of sort change
-        direction_text = "ascending" if self.sort_direction == "asc" else "descending"
+        if current_primary and current_primary[0] == column_name:
+            # Toggle direction for existing primary column
+            new_direction = "desc" if current_primary[1] == "asc" else "asc"
+            self.sort_fields = [(column_name, new_direction)]
+        else:
+            # Make this column the new primary (and only) sort column
+            self.sort_fields = [(column_name, "asc")]
+
+        # Save to state
+        self._save_sort_state()
+
+        # Notify user
+        direction_text = (
+            "ascending" if self.sort_fields[0][1] == "asc" else "descending"
+        )
         self.notify(
             f"Sorting by {column_name} ({direction_text})", severity="information"
         )
 
-        # Refresh with new sort
+        # Refresh with new sort (this will update column headers automatically)
         self.refresh_tasks()
 
+    def _get_column_headers_with_indicators(self) -> list[str]:
+        """Get column headers with sort indicators.
+
+        Returns:
+            List of column header strings with ▲/▼ indicators for sorted columns
+        """
+        headers = []
+        for col in self.columns_config:
+            display_name = self.column_display_map.get(col, col.title())
+
+            # Check if this column is in the sort fields
+            sort_indicator = ""
+            for idx, (sort_col, sort_dir) in enumerate(self.sort_fields):
+                if sort_col == col:
+                    # Add indicator
+                    indicator = "▲" if sort_dir == "asc" else "▼"
+                    # Add number for multi-column sort (1, 2, 3)
+                    if len(self.sort_fields) > 1:
+                        sort_indicator = f" {idx + 1}{indicator}"
+                    else:
+                        sort_indicator = f" {indicator}"
+                    break
+
+            headers.append(f"{display_name}{sort_indicator}")
+
+        return headers
+
     def _update_column_headers(self) -> None:
-        """Update column headers to show sort indicators (Task 5)."""
-        # This method is no longer needed - we'll use a different approach
-        # Instead of clearing and re-adding columns, we'll just refresh the table
-        # The sort indicators will be shown in the status bar or via notifications
+        """Update column headers to show sort indicators.
+
+        This method is no longer needed since refresh_tasks() now automatically
+        updates column headers on every refresh.
+        """
+        # This method is kept for backwards compatibility but does nothing
+        # Column headers are now updated automatically by refresh_tasks()
         pass
 
+    def _save_sort_state(self) -> None:
+        """Save current sort configuration to state table."""
+        if not self._state_table:
+            return
 
-def run_tui(db, tasks_table, config=None, history_table=None):
+        try:
+            import json
+
+            # Serialize sort_fields to JSON
+            sort_json = json.dumps(self.sort_fields)
+
+            # Check if state record exists
+            query = self._state_table.config_key == "sort_fields"
+            rows = self.db(query).select()
+
+            if rows:
+                # Update existing
+                rows[0].update_record(config_value=sort_json)
+            else:
+                # Insert new
+                self._state_table.insert(
+                    config_key="sort_fields",
+                    config_value=sort_json,
+                )
+
+            self.db.commit()
+        except Exception:
+            # Don't fail if state save fails
+            pass
+
+    def _load_sort_state(self) -> None:
+        """Load sort configuration from state table."""
+        if not self._state_table:
+            return
+
+        try:
+            import json
+
+            # Query for sort_fields
+            query = self._state_table.config_key == "sort_fields"
+            rows = self.db(query).select()
+
+            if rows and rows[0].config_value:
+                # Deserialize from JSON
+                self.sort_fields = json.loads(rows[0].config_value)
+        except Exception:
+            # If load fails, use default
+            pass
+
+
+def run_tui(db, tasks_table, config=None, history_table=None, state_table=None):
     """Run the Textual TUI.
 
     Args:
@@ -2843,8 +3142,9 @@ def run_tui(db, tasks_table, config=None, history_table=None):
         tasks_table: Tasks table object
         config: Configuration dict with 'theme' and 'config_file' keys
         history_table: TaskHistory table object (optional)
+        state_table: DolistState table object (optional)
     """
-    app = DoListTUI(db, tasks_table, config, history_table)
+    app = DoListTUI(db, tasks_table, config, history_table, state_table)
     try:
         app.run()
     except Exception as e:

@@ -238,6 +238,7 @@ console = Console()
 db = None
 tasks = None
 history = None
+state = None
 
 
 SHELLDOC = r"""
@@ -313,7 +314,14 @@ def database(DBURI):
         FieldDef("size", "string", default="U"),
     )
 
-    return _db, tasks, history
+    # DolistState table for persistent UI state (sorting, filters, theme, etc.)
+    state = _db.define_table(
+        "dolist_state",
+        FieldDef("config_key", "string"),
+        FieldDef("config_value", "string"),
+    )
+
+    return _db, tasks, history, state
 
 
 def init_db(use_db: Optional[str] = None):
@@ -322,7 +330,7 @@ def init_db(use_db: Optional[str] = None):
     Returns:
         The database URI that was used
     """
-    global db, tasks, history, DBDIR
+    global db, tasks, history, state, DBDIR
     dburi = DBURI
     if use_db:
         # Check if it's an absolute path
@@ -336,7 +344,7 @@ def init_db(use_db: Optional[str] = None):
         else:
             # Relative path: replace database name in URI
             dburi = dburi.replace("tasks", use_db).replace("dopy", use_db)
-    db, tasks, history = database(dburi)
+    db, tasks, history, state = database(dburi)
     return dburi
 
 
@@ -478,7 +486,7 @@ def default_action(
             "config_dir": DBDIR,
         }
         try:
-            run_tui(db, tasks, tui_config, history)
+            run_tui(db, tasks, tui_config, history, state)
         except KeyboardInterrupt:
             console.print("\n[yellow]TUI interrupted by user[/yellow]")
         except Exception as e:
@@ -725,7 +733,7 @@ def default_action(
             "config_dir": DBDIR,
         }
         try:
-            run_tui(db, tasks, tui_config, history)
+            run_tui(db, tasks, tui_config, history, state)
         except KeyboardInterrupt:
             console.print("\n[yellow]TUI interrupted by user[/yellow]")
         except Exception as e:
