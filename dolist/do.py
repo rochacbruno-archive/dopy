@@ -1261,6 +1261,18 @@ def ls(
         for row in rows:
             # Format reminder display
             reminder_display = ""
+
+            # Safeguard: If reminder text exists but timestamp is NULL, try to recalculate
+            if row.reminder and not row.reminder_timestamp:
+                parsed_dt, error, repeat_interval = parse_reminder(row.reminder)
+                if not error and parsed_dt:
+                    row.update_record(
+                        reminder_timestamp=parsed_dt,
+                        reminder_repeat=repeat_interval or row.get("reminder_repeat"),
+                    )
+                    db.commit()
+                    row._data["reminder_timestamp"] = parsed_dt
+
             if row.reminder_timestamp:
                 # Check if reminder is in the past
                 if row.reminder_timestamp < now:
@@ -1339,6 +1351,18 @@ def ls(
     for row in rows:
         # Format reminder display
         reminder_display = ""
+
+        # Safeguard: If reminder text exists but timestamp is NULL, try to recalculate
+        if row.reminder and not row.reminder_timestamp:
+            parsed_dt, error, repeat_interval = parse_reminder(row.reminder)
+            if not error and parsed_dt:
+                row.update_record(
+                    reminder_timestamp=parsed_dt,
+                    reminder_repeat=repeat_interval or row.get("reminder_repeat"),
+                )
+                db.commit()
+                row._data["reminder_timestamp"] = parsed_dt
+
         if row.reminder_timestamp:
             # Check if reminder is in the past
             if row.reminder_timestamp < now:

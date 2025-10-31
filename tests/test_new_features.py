@@ -20,10 +20,16 @@ class TestJSONOutput:
         mock_row1.name = "Test task"
         mock_row1.tag = "work"
         mock_row1.status = "new"
-        mock_row1.reminder = "tomorrow"
+        mock_row1.reminder = None  # Changed from "tomorrow" to None to avoid parsing
         mock_row1.reminder_timestamp = None
+        mock_row1.reminder_repeat = None
         mock_row1.notes = ["note 1"]
         mock_row1.created_on = datetime(2024, 1, 1, 12, 0)
+        mock_row1._data = {}
+        mock_row1.get = (
+            lambda k, d=None: getattr(mock_row1, k, d) if hasattr(mock_row1, k) else d
+        )
+        mock_row1.update_record = Mock()
 
         mock_row2 = Mock()
         mock_row2.id = 2
@@ -32,8 +38,14 @@ class TestJSONOutput:
         mock_row2.status = "done"
         mock_row2.reminder = None
         mock_row2.reminder_timestamp = None
+        mock_row2.reminder_repeat = None
         mock_row2.notes = []
         mock_row2.created_on = datetime(2024, 1, 2, 10, 30)
+        mock_row2._data = {}
+        mock_row2.get = (
+            lambda k, d=None: getattr(mock_row2, k, d) if hasattr(mock_row2, k) else d
+        )
+        mock_row2.update_record = Mock()
 
         # Mock the database query chain
         mock_select_result = Mock()
@@ -523,9 +535,16 @@ class TestLsCommand:
         mock_row.name = "Task"
         mock_row.tag = "default"
         mock_row.status = "new"
+        mock_row.reminder = None
         mock_row.reminder_timestamp = None
+        mock_row.reminder_repeat = None
         mock_row.notes = []
         mock_row.created_on = datetime(2024, 1, 1)
+        mock_row._data = {}
+        mock_row.get = (
+            lambda k, d=None: getattr(mock_row, k, d) if hasattr(mock_row, k) else d
+        )
+        mock_row.update_record = Mock()
 
         # Mock the database query chain
         mock_select_result = Mock()
@@ -589,10 +608,14 @@ class TestLsCommand:
         mock_row.status = "new"
         mock_row.tag = "default"
         mock_row.created_on = datetime.now()
+        mock_row.reminder = None
         mock_row.reminder_timestamp = None
+        mock_row.reminder_repeat = None
+        mock_row._data = {}
         mock_row.get = (
             lambda k, d=None: getattr(mock_row, k, d) if hasattr(mock_row, k) else d
         )
+        mock_row.update_record = Mock()
 
         mock_query = Mock()
         mock_query.select = Mock(return_value=[mock_row])
