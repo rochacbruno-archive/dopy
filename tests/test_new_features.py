@@ -737,6 +737,53 @@ class TestDelayAction:
         mock_parse.assert_called_once_with("10 minutes")
 
 
+class TestNoteAddAction:
+    """Test the note add action."""
+
+    @patch("dolist.do.init_db")
+    @patch("dolist.do._show_task")
+    @patch("dolist.do.console")
+    def test_note_add_displays_notes(self, mock_console, mock_show_task, mock_init_db):
+        """Test that adding a note shows the notes correctly."""
+        import dolist.do
+        from dolist.do import default_action
+
+        # Create initial row with no notes
+        mock_row = Mock()
+        mock_row.id = 1
+        mock_row.name = "Test task"
+        mock_row.notes = []
+        mock_row.update_record = Mock()
+
+        # Create refreshed row with the note added
+        mock_refreshed_row = Mock()
+        mock_refreshed_row.id = 1
+        mock_refreshed_row.name = "Test task"
+        mock_refreshed_row.notes = ["Test note"]
+
+        mock_tasks = Mock()
+        # First call returns original row, second call (refresh) returns updated row
+        mock_tasks.__getitem__ = Mock(side_effect=[mock_row, mock_refreshed_row])
+
+        dolist.do.db = Mock()
+        dolist.do.tasks = mock_tasks
+        dolist.do.history = None
+
+        # Add note: dolist 1 note Test note
+        default_action(1, "note", "Test", "note")
+
+        # Should update with note added
+        mock_row.update_record.assert_called_once()
+        call_kwargs = mock_row.update_record.call_args[1]
+        assert call_kwargs["notes"] == ["Test note"]
+
+        # Should re-fetch the row (two calls to tasks[id])
+        assert mock_tasks.__getitem__.call_count == 2
+
+        # Should call _show_task with the refreshed row
+        mock_show_task.assert_called_once_with(mock_refreshed_row)
+
+
 class TestNoteRemoveAction:
     """Test the note --rm action."""
 

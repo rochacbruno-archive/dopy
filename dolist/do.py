@@ -650,6 +650,8 @@ def default_action(
                 console.print("[bold red]Note not found[/bold red]")
                 return
 
+        # Re-fetch the row from database to get properly deserialized notes
+        row = tasks[id]
         # Show task with notes
         _show_task(row)
 

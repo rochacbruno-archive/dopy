@@ -1588,8 +1588,9 @@ class DoListTUI(App):
                     f"[bold cyan]{result_count} results for /{filter_desc}[/bold cyan]"
                 )
             else:
-                # No active search filter
-                search_status.update("")
+                # No active search filter - show total task count
+                task_word = "task" if result_count == 1 else "tasks"
+                search_status.update(f"[bold cyan]{result_count} {task_word}[/bold cyan]")
         except Exception:
             pass
 
